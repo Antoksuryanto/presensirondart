@@ -6,6 +6,7 @@
     <title>Siskamling Digital - Presensi Ronda</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         body {
@@ -413,7 +414,13 @@
                                 </div>
                             </div>
 
-                            <button onclick="saveGeofenceSettings()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 rounded-lg shadow-lg shadow-blue-500/20 transition flex items-center justify-center gap-2">
+                            <div class="mt-4">
+                                <label class="block text-sm text-slate-400 mb-2">Pratinjau Peta Radius</label>
+                                <div id="geofenceMap" class="h-64 rounded-lg border border-slate-700 overflow-hidden bg-slate-900"></div>
+                                <p class="text-[11px] text-slate-500 mt-2">Peta menampilkan pusat pos ronda dan batas toleransi dalam bentuk lingkaran.</p>
+                            </div>
+
+                            <button onclick="saveGeofenceSettings()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 rounded-lg shadow-lg shadow-blue-500/20 transition flex items-center justify-center gap-2 mt-4">
                                 <i class="fas fa-save"></i> Simpan Batas Lokasi
                             </button>
                         </div>
@@ -833,6 +840,7 @@
     <!-- Custom Toast Notification Container -->
     <div id="toastContainer" class="fixed top-4 left-0 right-0 z-[100] flex flex-col items-center pointer-events-none px-4 gap-2"></div>
 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <script>
         // =========================================================================
         // TEMPELKAN URL WEB APP GOOGLE APPS SCRIPT ANDA DI ANTARA TANDA PETIK DI BAWAH:
@@ -929,10 +937,10 @@
         ];
 
         let geofenceSettings = {
-            lat: -7.7820732,    // Pusat koordinat presensi
-            lng: 110.3030349,   // Pusat koordinat presensi
+            lat: -7.782054939067069,    // Pusat koordinat presensi
+            lng: 110.30311922838405,   // Pusat koordinat presensi
             radius: 5,          // Batas radius default 5 meter
-            name: "Pos Ronda Utama RT 01",
+            name: "Angkringan Pak Santo",
             mockMode: true,    
             simulatedDistanceState: "inside" 
         };
@@ -942,6 +950,10 @@
         let userCurrentCoords = { lat: null, lng: null };
         let calculatedDistance = null; // dalam meter
         let syncIntervalId = null;
+        let attendanceResetIntervalId = null;
+        let geofenceMap = null;
+        let geofenceMarker = null;
+        let geofenceCircle = null;
 
         // --- LOGIKA CLOUD SINKRONISASI (GOOGLE SHEET - CORE SCRIPT) ---
         
@@ -1193,9 +1205,55 @@
         }
 
         // --- PROSES AWAL STARTUP ---
+        function getAttendanceDayKey() {
+            return new Date().toISOString().slice(0, 10);
+        }
+
+        function resetAttendanceStatesIfDayChanged() {
+            const todayKey = getAttendanceDayKey();
+            const lastKey = localStorage.getItem('siskamling_attendance_day_key');
+
+            if (!lastKey) {
+                localStorage.setItem('siskamling_attendance_day_key', todayKey);
+                return false;
+            }
+
+            if (lastKey === todayKey) {
+                return false;
+            }
+
+            Object.values(regus).forEach(regu => {
+                regu.members.forEach(member => {
+                    if (member.status !== 'none') {
+                        member.status = 'none';
+                        member.time = null;
+                    }
+                });
+            });
+
+            localStorage.setItem('siskamling_attendance_day_key', todayKey);
+            if (currentUser && currentUser.role === 'admin') {
+                renderAdminRekap();
+            } else if (currentUser && currentUser.role !== 'admin') {
+                renderAttendanceList();
+            }
+            return true;
+        }
+
+        function startAttendanceDayResetChecker() {
+            if (attendanceResetIntervalId) clearInterval(attendanceResetIntervalId);
+            attendanceResetIntervalId = setInterval(() => {
+                const changed = resetAttendanceStatesIfDayChanged();
+                if (changed) {
+                    showToast('Status presensi telah direset karena hari berganti.', 'info');
+                }
+            }, 60000);
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             updateClock();
             setInterval(updateClock, 1000);
+            startAttendanceDayResetChecker();
             
             // Set tanggal
             const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -1226,6 +1284,13 @@
                 document.getElementById('cfgPosRadius').value = geofenceSettings.radius;
                 document.getElementById('cfgPosName').value = geofenceSettings.name;
             }
+
+            bindGeofenceInputs();
+            renderGeofenceMap(
+                document.getElementById('cfgPosLat')?.value || geofenceSettings.lat,
+                document.getElementById('cfgPosLng')?.value || geofenceSettings.lng,
+                document.getElementById('cfgPosRadius')?.value || geofenceSettings.radius
+            );
         });
 
         // --- Clock Utility ---
@@ -1388,6 +1453,87 @@
             }
         }
 
+        function bindGeofenceInputs() {
+            const latInput = document.getElementById('cfgPosLat');
+            const lngInput = document.getElementById('cfgPosLng');
+            const radiusInput = document.getElementById('cfgPosRadius');
+
+            [latInput, lngInput, radiusInput].forEach(input => {
+                if (!input) return;
+                input.removeEventListener('input', handleGeofenceInput);
+                input.removeEventListener('change', handleGeofenceInput);
+                input.addEventListener('input', handleGeofenceInput);
+                input.addEventListener('change', handleGeofenceInput);
+            });
+        }
+
+        function handleGeofenceInput() {
+            const latInput = document.getElementById('cfgPosLat');
+            const lngInput = document.getElementById('cfgPosLng');
+            const radiusInput = document.getElementById('cfgPosRadius');
+            if (!latInput || !lngInput || !radiusInput) return;
+            renderGeofenceMap(latInput.value, lngInput.value, radiusInput.value);
+        }
+
+        function initGeofenceMap() {
+            const mapEl = document.getElementById('geofenceMap');
+            if (!mapEl || geofenceMap) return;
+
+            if (typeof L === 'undefined') {
+                mapEl.innerHTML = '<div class="flex h-full items-center justify-center text-sm text-slate-400">Peta tidak dapat dimuat.</div>';
+                return;
+            }
+
+            geofenceMap = L.map('geofenceMap', { zoomControl: true, scrollWheelZoom: false });
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(geofenceMap);
+
+            renderGeofenceMap(
+                document.getElementById('cfgPosLat')?.value || geofenceSettings.lat,
+                document.getElementById('cfgPosLng')?.value || geofenceSettings.lng,
+                document.getElementById('cfgPosRadius')?.value || geofenceSettings.radius
+            );
+        }
+
+        function renderGeofenceMap(lat, lng, radius) {
+            const latValue = parseFloat(lat);
+            const lngValue = parseFloat(lng);
+            const radiusValue = parseFloat(radius);
+
+            if (isNaN(latValue) || isNaN(lngValue) || isNaN(radiusValue)) return;
+
+            initGeofenceMap();
+            if (!geofenceMap) return;
+
+            if (geofenceMarker) geofenceMap.removeLayer(geofenceMarker);
+            if (geofenceCircle) geofenceMap.removeLayer(geofenceCircle);
+
+            const center = [latValue, lngValue];
+            geofenceMarker = L.marker(center, {
+                icon: L.divIcon({
+                    html: '<div style="width:14px;height:14px;border-radius:999px;border:2px solid white;background:#2563eb;box-shadow:0 0 0 6px rgba(37,99,235,0.16);"></div>',
+                    className: '',
+                    iconSize: [14, 14],
+                    iconAnchor: [7, 7]
+                })
+            });
+
+            geofenceCircle = L.circle(center, {
+                radius: Math.max(radiusValue, 1),
+                color: '#38bdf8',
+                weight: 2,
+                fillColor: '#38bdf8',
+                fillOpacity: 0.16
+            });
+
+            geofenceMarker.addTo(geofenceMap);
+            geofenceCircle.addTo(geofenceMap);
+            geofenceMap.setView(center, radiusValue > 40 ? 15 : 17);
+            setTimeout(() => geofenceMap.invalidateSize(), 120);
+        }
+
         // --- Admin Tab System ---
         function switchAdminTab(tabId) {
             document.querySelectorAll('.admin-section').forEach(sec => sec.classList.add('hidden'));
@@ -1409,6 +1555,15 @@
                 renderAdminAkunTable();
                 populateAccMemberSelect();
             }
+            if (tabId === 'pengaturan') {
+                setTimeout(() => {
+                    renderGeofenceMap(
+                        document.getElementById('cfgPosLat')?.value || geofenceSettings.lat,
+                        document.getElementById('cfgPosLng')?.value || geofenceSettings.lng,
+                        document.getElementById('cfgPosRadius')?.value || geofenceSettings.radius
+                    );
+                }, 120);
+            }
         }
 
         // Admin Location Config Management
@@ -1428,6 +1583,7 @@
             geofenceSettings.lng = lng;
             geofenceSettings.radius = rad;
 
+            renderGeofenceMap(lat, lng, rad);
             showToast("Konfigurasi Pos Ronda dan Geofencing disimpan!", "success");
             addToHistory('fa-map-marked-alt', 'text-indigo-400', 'Pengaturan Lokasi Diubah', `Admin RT merestrukturisasi pusat Pos Ronda ke koordinat [${lat}, ${lng}] dengan radius aman ${rad}m.`);
             
@@ -1447,6 +1603,11 @@
                 (position) => {
                     document.getElementById('cfgPosLat').value = position.coords.latitude.toFixed(6);
                     document.getElementById('cfgPosLng').value = position.coords.longitude.toFixed(6);
+                    renderGeofenceMap(
+                        document.getElementById('cfgPosLat').value,
+                        document.getElementById('cfgPosLng').value,
+                        document.getElementById('cfgPosRadius').value
+                    );
                     showToast("Sinyal GPS didapatkan!", "success");
                 },
                 () => {
@@ -1682,6 +1843,7 @@
         }
 
         function renderAdminRekap() {
+            resetAttendanceStatesIfDayChanged();
             const tbody = document.getElementById('rekapPresensiBody');
             if(!tbody) return;
             tbody.innerHTML = '';
@@ -2235,8 +2397,14 @@
                             <p class="text-sm text-slate-200 font-semibold">${rep.deskripsi}</p>
                             <p class="text-xs text-slate-400"><i class="fas fa-map-marker-alt text-red-400 mr-1"></i> Lokasi: ${rep.lokasi}</p>
                         </div>
-                        <div class="text-right text-xs text-slate-500">
-                            Dilaporkan oleh:<br><span class="font-semibold text-slate-300">${rep.reporter}</span>
+                        <div class="flex flex-col items-end gap-2">
+                            <div class="text-right text-xs text-slate-500">
+                                Dilaporkan oleh:<br><span class="font-semibold text-slate-300">${rep.reporter}</span>
+                            </div>
+                            <div class="flex gap-1.5">
+                                <button onclick="editIncidentEntry(${rep.id})" class="text-blue-400 hover:text-blue-300 text-[11px] px-2 py-1 rounded border border-blue-800/40 bg-blue-950/30">Edit</button>
+                                <button onclick="deleteIncidentEntry(${rep.id})" class="text-red-400 hover:text-red-300 text-[11px] px-2 py-1 rounded border border-red-800/40 bg-red-950/30">Hapus</button>
+                            </div>
                         </div>
                     `;
                     incContainer.appendChild(el);
@@ -2264,7 +2432,11 @@
                                 <p class="text-xs text-slate-400">Tujuan: ${g.tujuan}</p>
                             </div>
                         </div>
-                        <span class="text-xs text-slate-500 font-mono">${g.time}</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-slate-500 font-mono">${g.time}</span>
+                            <button onclick="editGuestEntry(${g.id})" class="text-blue-400 hover:text-blue-300 text-[11px] px-2 py-1 rounded border border-blue-800/40 bg-blue-950/30">Edit</button>
+                            <button onclick="deleteGuestEntry(${g.id})" class="text-red-400 hover:text-red-300 text-[11px] px-2 py-1 rounded border border-red-800/40 bg-red-950/30">Hapus</button>
+                        </div>
                     `;
                     guestContainer.appendChild(el);
                 });
@@ -2480,6 +2652,7 @@
 
         // --- Attendance Features (Dynamic to Regu) ---
         function renderAttendanceList() {
+            resetAttendanceStatesIfDayChanged();
             if (!currentUser || !currentUser.regu) return;
 
             const container = document.getElementById('attendanceList');
@@ -2704,6 +2877,66 @@
             setTimeout(() => { switchKetuaTab('riwayat'); }, 800);
         }
 
+        function editIncidentEntry(id) {
+            const item = incidentReports.find(rep => rep.id === id);
+            if (!item) return;
+
+            const newKategori = prompt('Edit kategori kejadian:', item.kategori);
+            if (newKategori === null) return;
+            const newLokasi = prompt('Edit lokasi kejadian:', item.lokasi);
+            if (newLokasi === null) return;
+            const newDeskripsi = prompt('Edit deskripsi kejadian:', item.deskripsi);
+            if (newDeskripsi === null) return;
+
+            item.kategori = newKategori.trim() || item.kategori;
+            item.lokasi = newLokasi.trim() || item.lokasi;
+            item.deskripsi = newDeskripsi.trim() || item.deskripsi;
+            item.time = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+            renderAdminReports();
+            sendDatabaseToCloud();
+            showToast('Data kejadian berhasil diperbarui.', 'success');
+        }
+
+        function deleteIncidentEntry(id) {
+            if (!confirm('Hapus laporan kejadian ini?')) return;
+            incidentReports = incidentReports.filter(rep => rep.id !== id);
+            renderAdminReports();
+            sendDatabaseToCloud();
+            showToast('Laporan kejadian berhasil dihapus.', 'info');
+        }
+
+        function editGuestEntry(id) {
+            const item = guestList.find(g => g.id === id);
+            if (!item) return;
+
+            const newPlat = prompt('Edit plat nomor / identitas:', item.plat);
+            if (newPlat === null) return;
+            const newJenis = prompt('Edit jenis kendaraan:', item.jenis);
+            if (newJenis === null) return;
+            const newTujuan = prompt('Edit tujuan:', item.tujuan);
+            if (newTujuan === null) return;
+
+            item.plat = newPlat.trim().toUpperCase() || item.plat;
+            item.jenis = newJenis.trim() || item.jenis;
+            item.tujuan = newTujuan.trim() || item.tujuan;
+            item.time = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+            renderGuestList();
+            renderAdminReports();
+            sendDatabaseToCloud();
+            showToast('Data tamu berhasil diperbarui.', 'success');
+        }
+
+        function deleteGuestEntry(id) {
+            if (!confirm('Hapus catatan tamu ini?')) return;
+            guestList = guestList.filter(g => g.id !== id);
+            renderGuestList();
+            renderAdminReports();
+            sendDatabaseToCloud();
+            showToast('Catatan tamu berhasil dihapus.', 'info');
+        }
+
         // --- Guest & Vehicle Logs ---
         function handleTamuSubmit(e) {
             e.preventDefault();
@@ -2737,16 +2970,22 @@
             guestList.slice(0, 3).forEach(g => {
                 const icon = g.jenis === 'Motor' ? 'fa-motorcycle' : (g.jenis === 'Mobil' ? 'fa-car' : 'fa-walking');
                 const el = document.createElement('div');
-                el.className = 'bg-slate-900 border border-slate-700 p-3 rounded-lg flex items-center gap-3';
+                el.className = 'bg-slate-900 border border-slate-700 p-3 rounded-lg flex items-center justify-between gap-3';
                 el.innerHTML = `
-                    <div class="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-slate-400 shrink-0">
-                        <i class="fas ${icon}"></i>
+                    <div class="flex items-center gap-3 flex-grow">
+                        <div class="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-slate-400 shrink-0">
+                            <i class="fas ${icon}"></i>
+                        </div>
+                        <div class="flex-grow">
+                            <div class="font-bold text-sm text-white">${g.plat}</div>
+                            <div class="text-[10px] text-slate-400 line-clamp-1">Tujuan: ${g.tujuan}</div>
+                        </div>
                     </div>
-                    <div class="flex-grow">
-                        <div class="font-bold text-sm text-white">${g.plat}</div>
-                        <div class="text-[10px] text-slate-400 line-clamp-1">Tujuan: ${g.tujuan}</div>
+                    <div class="flex items-center gap-2">
+                        <div class="text-xs text-slate-500 whitespace-nowrap">${g.time}</div>
+                        <button onclick="editGuestEntry(${g.id})" class="text-blue-400 hover:text-blue-300 text-[10px] px-2 py-1 rounded border border-blue-800/40 bg-blue-950/30">Edit</button>
+                        <button onclick="deleteGuestEntry(${g.id})" class="text-red-400 hover:text-red-300 text-[10px] px-2 py-1 rounded border border-red-800/40 bg-red-950/30">Hapus</button>
                     </div>
-                    <div class="text-xs text-slate-500 whitespace-nowrap">${g.time}</div>
                 `;
                 container.appendChild(el);
             });
