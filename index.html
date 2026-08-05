@@ -852,7 +852,7 @@
         
         // Akun bawaan sistem awal (Jika mode offline aktif)
         let usersDB = {
-            "admin": { password: "admin123", name: "Pak RT Setiawan", role: "admin", regu: null },
+            "admin": { password: "admin123", name: "Pak RT", role: "admin", regu: null },
             "budi": { password: "ronda123", name: "Budi Santoso", role: "ketua", regu: "malam_senin" },
             "yanto": { password: "ronda123", name: "Yanto Wijaya", role: "ketua", regu: "malam_selasa" },
             "agus": { password: "ronda123", name: "Agus Pranoto", role: "peserta", regu: "malam_senin" },
@@ -949,6 +949,7 @@
         let currentUser = null;
         let userCurrentCoords = { lat: null, lng: null };
         let calculatedDistance = null; // dalam meter
+        let geofenceLastPositionAccuracy = null;
         let syncIntervalId = null;
         let attendanceResetIntervalId = null;
         let geofenceMap = null;
@@ -2473,55 +2474,76 @@
         }
 
         // Verifikasi Lokasi Geofencing GPS
-        function triggerLocationVerification() {
+        async function triggerLocationVerification() {
             if (geofenceSettings.mockMode) {
                 if (geofenceSettings.simulatedDistanceState === "inside") {
                     userCurrentCoords.lat = geofenceSettings.lat;
                     userCurrentCoords.lng = geofenceSettings.lng;
                     calculatedDistance = 0; 
+                    geofenceLastPositionAccuracy = 0;
                 } else {
                     userCurrentCoords.lat = geofenceSettings.lat + 0.0005;
                     userCurrentCoords.lng = geofenceSettings.lng + 0.0005;
                     calculatedDistance = calculateDistance(geofenceSettings.lat, geofenceSettings.lng, userCurrentCoords.lat, userCurrentCoords.lng);
+                    geofenceLastPositionAccuracy = null;
                 }
                 updateGeofenceUI();
                 renderAttendanceList();
-            } else {
-                if (!navigator.geolocation) {
-                    showToast("GPS tidak didukung pada browser Anda.", "error");
-                    return;
-                }
-                
-                updateGeofenceUIPlaceholder("Menghubungkan ke GPS...");
-                
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        userCurrentCoords.lat = position.coords.latitude;
-                        userCurrentCoords.lng = position.coords.longitude;
-                        calculatedDistance = calculateDistance(
-                            geofenceSettings.lat, 
-                            geofenceSettings.lng, 
-                            userCurrentCoords.lat, 
-                            userCurrentCoords.lng
-                        );
-                        updateGeofenceUI();
-                        renderAttendanceList();
-                        
-                        if (calculatedDistance <= geofenceSettings.radius) {
-                            showToast("Lokasi Ronda Terverifikasi!", "success");
-                        } else {
-                            showToast("Gagal verifikasi! Anda berada di luar area presensi yang ditentukan.", "warning");
-                        }
-                    },
-                    (error) => {
-                        calculatedDistance = null;
-                        updateGeofenceUI();
-                        renderAttendanceList();
-                        showToast("Akses koordinat GPS ditolak. Nyalakan GPS Anda.", "error");
-                    },
-                    { enableHighAccuracy: true, timeout: 6000 }
-                );
+                return;
             }
+
+            if (!navigator.geolocation) {
+                showToast("GPS tidak didukung pada browser Anda.", "error");
+                return;
+            }
+
+            if (!(window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+                showToast("Untuk hasil terbaik, buka aplikasi lewat HTTPS atau localhost. Beberapa browser membatasi akses lokasi di koneksi tidak aman.", "warning");
+            }
+
+            const permissionState = await requestGeolocationPermission();
+            if (permissionState === 'denied') {
+                showToast("Akses lokasi ditolak. Izinkan lokasi di pengaturan browser atau muat ulang halaman setelah memberikan izin.", "error");
+                geofenceLastPositionAccuracy = null;
+                calculatedDistance = null;
+                updateGeofenceUI();
+                renderAttendanceList();
+                return;
+            }
+
+            updateGeofenceUIPlaceholder("Menghubungkan ke GPS...");
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    userCurrentCoords.lat = position.coords.latitude;
+                    userCurrentCoords.lng = position.coords.longitude;
+                    geofenceLastPositionAccuracy = position.coords.accuracy ?? null;
+                    calculatedDistance = calculateDistance(
+                        geofenceSettings.lat,
+                        geofenceSettings.lng,
+                        userCurrentCoords.lat,
+                        userCurrentCoords.lng
+                    );
+                    updateGeofenceUI();
+                    renderAttendanceList();
+
+                    if (calculatedDistance <= geofenceSettings.radius) {
+                        showToast("Lokasi Ronda Terverifikasi!", "success");
+                    } else if (geofenceLastPositionAccuracy !== null && geofenceLastPositionAccuracy > Math.max(geofenceSettings.radius, 20)) {
+                        showToast("GPS kurang akurat. Coba ulangi verifikasi di area terbuka atau gunakan koneksi lokasi yang lebih baik.", "warning");
+                    } else {
+                        showToast("Gagal verifikasi! Anda berada di luar area presensi yang ditentukan.", "warning");
+                    }
+                },
+                (error) => {
+                    geofenceLastPositionAccuracy = null;
+                    calculatedDistance = null;
+                    updateGeofenceUI();
+                    renderAttendanceList();
+                    showToast(getGeolocationErrorMessage(error), "error");
+                },
+                { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+            );
         }
 
         // Placeholder UI loading GPS
@@ -2564,7 +2586,15 @@
                 `;
             } else {
                 const isInside = calculatedDistance <= geofenceSettings.radius;
-                
+                let accuracyHtml = '';
+                let accuracyWarningHtml = '';
+                if (geofenceLastPositionAccuracy !== null) {
+                    accuracyHtml = `<p class="text-[11px] text-slate-400 mt-1">Akurasi GPS: <strong>${geofenceLastPositionAccuracy.toFixed(0)} m</strong></p>`;
+                    if (geofenceLastPositionAccuracy > Math.max(geofenceSettings.radius, 20)) {
+                        accuracyWarningHtml = `<p class="text-[11px] text-yellow-300 mt-1 font-semibold">⚠️ Sinyal GPS kurang akurat. Coba ulangi verifikasi di area terbuka.</p>`;
+                    }
+                }
+
                 if (isInside) {
                     widget.className = "mb-5 p-4 rounded-xl border border-emerald-500/40 bg-emerald-950/20";
                     content = `
@@ -2577,6 +2607,8 @@
                                     <div>
                                         <h4 class="font-bold text-sm text-emerald-300">Sinyal GPS Terverifikasi</h4>
                                         <p class="text-xs text-slate-300">Jarak: <strong class="text-white">${calculatedDistance.toFixed(1)} meter</strong> dari Pos Ronda (Maks: ${geofenceSettings.radius}m)</p>
+                                        ${accuracyHtml}
+                                        ${accuracyWarningHtml}
                                     </div>
                                 </div>
                                 <button onclick="triggerLocationVerification()" class="bg-emerald-800 hover:bg-emerald-700 text-white text-[11px] font-semibold py-1.5 px-3 rounded-md transition self-start md:self-auto shrink-0">
@@ -2598,6 +2630,8 @@
                                     <div>
                                         <h4 class="font-bold text-sm text-red-400 uppercase tracking-wide">STATUS: DI LUAR AREA PRESENSI (Ronda Terkunci)</h4>
                                         <p class="text-xs text-slate-300">Jarak Anda: <strong class="text-white">${calculatedDistance.toFixed(1)} meter</strong> dari Pos Ronda (Batas aman: ${geofenceSettings.radius}m)</p>
+                                        ${accuracyHtml}
+                                        ${accuracyWarningHtml}
                                         <p class="text-[11px] text-red-400/95 mt-1 font-semibold">⚠️ Anda berada di luar area presensi yang telah ditentukan. Silahkan mendekat ke Pos Ronda.</p>
                                     </div>
                                 </div>
@@ -2648,6 +2682,29 @@
                       Math.sin(dLon / 2) * Math.sin(dLon / 2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             return R * c; 
+        }
+
+        function requestGeolocationPermission() {
+            if (!navigator.permissions || !navigator.permissions.query) return Promise.resolve(null);
+            return navigator.permissions.query({ name: 'geolocation' })
+                .then((status) => status.state)
+                .catch(() => null);
+        }
+
+        function getGeolocationErrorMessage(error) {
+            if (!error || typeof error.code !== 'number') {
+                return "Gagal mendapatkan lokasi. Periksa pengaturan lokasi browser Anda.";
+            }
+            switch (error.code) {
+                case 1:
+                    return "Akses lokasi ditolak. Izinkan lokasi di pengaturan browser.";
+                case 2:
+                    return "Lokasi tidak tersedia. Pastikan GPS atau layanan lokasi aktif.";
+                case 3:
+                    return "Waktu tunggu GPS habis. Coba lagi di area terbuka atau dekat jendela.";
+                default:
+                    return "Gagal mendapatkan lokasi. Periksa pengaturan GPS dan izinkan lokasi pada browser.";
+            }
         }
 
         // --- Attendance Features (Dynamic to Regu) ---
