@@ -2,7 +2,11 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Siskamling Digital - Presensi Ronda</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -17,6 +21,17 @@
                               radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.14), transparent 20%);
             background-attachment: fixed;
             -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: none;
+        }
+
+        /* Safe area untuk HP ber-notch (iPhone) */
+        .safe-top { padding-top: env(safe-area-inset-top); }
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+        /* Tombol sentuh lebih besar di HP */
+        @media (max-width: 640px) {
+            button { touch-action: manipulation; }
+            .btn-touch { min-height: 44px; }
         }
 
         .surface-card {
@@ -75,19 +90,19 @@
         }
     </style>
 </head>
-<body class="min-h-screen flex flex-col pb-20 md:pb-0 relative overflow-x-hidden">
+<body class="min-h-screen flex flex-col pb-20 md:pb-0 relative overflow-x-hidden safe-top">
 
     <!-- LOGIN SCREEN -->
     <div id="loginScreen" class="flex-grow flex items-center justify-center p-4">
         <!-- Kartu login dengan warna gelap presisi tinggi sesuai mockup gambar -->
-        <div class="bg-[#182232] border border-[#232f45] rounded-[24px] p-8 w-full max-w-[420px] shadow-2xl transition duration-300">
+        <div class="bg-[#182232] border border-[#232f45] rounded-[24px] p-6 sm:p-8 w-full max-w-[420px] shadow-2xl transition duration-300">
             <div class="text-center mb-8">
                 <!-- Lingkaran biru kokoh dengan ikon tameng putih -->
-                <div class="w-24 h-24 rounded-full bg-[#2563eb] flex items-center justify-center text-white shadow-lg shadow-blue-600/10 mx-auto mb-4">
-                    <i class="fas fa-shield-alt text-4xl"></i>
+                <div class="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-[#2563eb] flex items-center justify-center text-white shadow-lg shadow-blue-600/10 mx-auto mb-4">
+                    <i class="fas fa-shield-alt text-3xl sm:text-4xl"></i>
                 </div>
-                <h1 class="font-bold text-3xl text-white tracking-tight">Presensi Ronda</h1>
-                <p class="text-sm text-slate-400 mt-1">Sistem Keamanan RT 02 / RW 20 Rewulu Wetan Sidokarto Godean</p>
+                <h1 class="font-bold text-2xl sm:text-3xl text-white tracking-tight">Presensi Ronda</h1>
+                <p class="text-xs sm:text-sm text-slate-400 mt-1">Sistem Keamanan RT 02 / RW 20 Rewulu Wetan Sidokarto Godean</p>
             </div>
 
             <!-- Login Form -->
@@ -125,29 +140,29 @@
     <!-- MAIN APP SCREEN (HIDDEN BY DEFAULT) -->
     <div id="appScreen" class="hidden flex-grow flex flex-col">
         <!-- Top Navigation -->
-        <header class="bg-slate-800 shadow-md sticky top-0 z-50">
-            <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white shadow-lg">
-                        <i class="fas fa-shield-alt text-xl"></i>
+        <header class="bg-slate-800 shadow-md sticky top-0 z-50 safe-top">
+            <div class="max-w-4xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex justify-between items-center gap-2">
+                <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-blue-600 flex items-center justify-center text-white shadow-lg shrink-0">
+                        <i class="fas fa-shield-alt text-lg sm:text-xl"></i>
                     </div>
-                    <div>
+                    <div class="min-w-0">
                         <div class="flex items-center gap-2">
-                            <h1 class="font-bold text-lg leading-tight">Presensi Ronda</h1>
+                            <h1 class="font-bold text-base sm:text-lg leading-tight truncate">Presensi Ronda</h1>
                             <!-- INDIKATOR SYNC CLOUD BERKEDIP -->
-                            <div id="cloudSyncIndicator" class="flex items-center gap-1 bg-slate-900 px-2 py-0.5 rounded text-[10px] text-slate-500 font-semibold border border-slate-700">
+                            <div id="cloudSyncIndicator" class="flex items-center gap-1 bg-slate-900 px-1.5 sm:px-2 py-0.5 rounded text-[9px] sm:text-[10px] text-slate-500 font-semibold border border-slate-700 shrink-0">
                                 <i id="cloudSyncIcon" class="fas fa-cloud"></i>
-                                <span id="cloudSyncText">Offline</span>
+                                <span id="cloudSyncText" class="hidden sm:inline">Offline</span>
                             </div>
                         </div>
-                        <p class="text-xs text-slate-400" id="headerReguSub">RT 02 / RW 20 Rewulu Wetan Sidokarto Godean</p>
+                        <p class="text-[10px] sm:text-xs text-slate-400 truncate" id="headerReguSub">RT 02 / RW 20 Rewulu Wetan Sidokarto Godean</p>
                     </div>
                 </div>
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 sm:gap-3 shrink-0">
                     <div id="currentDateTime" class="text-xs text-slate-300 font-mono hidden md:block"></div>
-                    <div class="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700">
-                        <span id="roleBadge" class="text-[10px] px-2 py-0.5 rounded-full font-bold"></span>
-                        <span id="navUsername" class="text-xs font-medium text-white max-w-[80px] truncate"></span>
+                    <div class="flex items-center gap-1.5 sm:gap-2 bg-slate-900 px-2 sm:px-3 py-1.5 rounded-lg border border-slate-700">
+                        <span id="roleBadge" class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full font-bold"></span>
+                        <span id="navUsername" class="text-[11px] sm:text-xs font-medium text-white max-w-[60px] sm:max-w-[80px] truncate"></span>
                         <button id="changePasswordActionBtn" onclick="openChangePasswordModal()" class="hidden text-slate-300 hover:text-white text-xs flex items-center gap-1" title="Ubah Password">
                             <i class="fas fa-key"></i>
                             <span class="hidden sm:inline">Ubah Password</span>
@@ -513,11 +528,11 @@
                         <!-- Populated dynamically -->
                     </div>
 
-                    <div class="mt-6 pt-4 border-t border-slate-700 flex justify-between items-center">
+                    <div class="mt-6 pt-4 border-t border-slate-700 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
                         <div class="text-sm text-slate-400">
                             Hadir: <span id="countHadir" class="text-green-400 font-bold">0</span> / <span id="totalAnggota">0</span>
                         </div>
-                        <button onclick="submitAllAttendance()" id="btnSubmitPresensi" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 shadow-lg shadow-blue-500/30">
+                        <button onclick="submitAllAttendance()" id="btnSubmitPresensi" class="btn-touch bg-blue-600 hover:bg-blue-500 text-white px-5 py-3 sm:py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30 w-full sm:w-auto">
                             <i class="fas fa-save"></i> Simpan Presensi
                         </button>
                     </div>
@@ -656,20 +671,20 @@
         </main>
 
         <!-- Mobile Bottom Navigation (Ketua & Peserta, hidden for Admin) -->
-        <nav id="mobileBottomNav" class="flex md:hidden fixed bottom-0 w-full bg-slate-800 border-t border-slate-700 justify-around py-3 pb-4 z-50">
-            <button onclick="switchKetuaTab('presensi')" id="nav-ketua-presensi" class="flex flex-col items-center text-blue-400 gap-1 w-1/4">
+        <nav id="mobileBottomNav" class="flex md:hidden fixed bottom-0 w-full bg-slate-800 border-t border-slate-700 justify-around py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] z-50">
+            <button onclick="switchKetuaTab('presensi')" id="nav-ketua-presensi" class="flex flex-col items-center text-blue-400 gap-1 w-1/4 btn-touch">
                 <i class="fas fa-clipboard-check text-xl"></i>
                 <span class="text-[10px] font-medium">Presensi</span>
             </button>
-            <button onclick="switchKetuaTab('laporan')" id="nav-ketua-laporan" class="flex flex-col items-center text-slate-500 hover:text-slate-300 gap-1 w-1/4">
+            <button onclick="switchKetuaTab('laporan')" id="nav-ketua-laporan" class="flex flex-col items-center text-slate-500 hover:text-slate-300 gap-1 w-1/4 btn-touch">
                 <i class="fas fa-bullhorn text-xl"></i>
                 <span class="text-[10px] font-medium">Lapor</span>
             </button>
-            <button onclick="switchKetuaTab('tamu')" id="nav-ketua-tamu" class="flex flex-col items-center text-slate-500 hover:text-slate-300 gap-1 w-1/4">
+            <button onclick="switchKetuaTab('tamu')" id="nav-ketua-tamu" class="flex flex-col items-center text-slate-500 hover:text-slate-300 gap-1 w-1/4 btn-touch">
                 <i class="fas fa-car text-xl"></i>
                 <span class="text-[10px] font-medium">Tamu</span>
             </button>
-            <button onclick="switchKetuaTab('riwayat')" id="nav-ketua-riwayat" class="flex flex-col items-center text-slate-500 hover:text-slate-300 gap-1 w-1/4">
+            <button onclick="switchKetuaTab('riwayat')" id="nav-ketua-riwayat" class="flex flex-col items-center text-slate-500 hover:text-slate-300 gap-1 w-1/4 btn-touch">
                 <i class="fas fa-history text-xl"></i>
                 <span class="text-[10px] font-medium">Log</span>
             </button>
@@ -978,6 +993,27 @@
             throw lastError;
         }
         
+        // Ambil setting geofence dari cloud. Cloud = otoritas (admin kontrol semua perangkat).
+        // simulatedDistanceState tetap lokal (hanya state tombol simulator di perangkat ini).
+        function applyCloudGeofence(cloudGeofence) {
+            if (!cloudGeofence) return;
+            const simStateBackup = geofenceSettings.simulatedDistanceState;
+            const mockChanged = geofenceSettings.mockMode !== cloudGeofence.mockMode;
+            geofenceSettings = { ...geofenceSettings, ...cloudGeofence };
+            geofenceSettings.simulatedDistanceState = simStateBackup;
+
+            // Sinkronkan toggle di Pengaturan Pos
+            const toggle = document.getElementById('cfgMockToggle');
+            if (toggle) toggle.checked = !!geofenceSettings.mockMode;
+
+            // Jika mock mode berubah jadi mati, reset & verifikasi ulang GPS asli
+            if (mockChanged && !geofenceSettings.mockMode && currentUser && currentUser.role !== 'admin') {
+                userCurrentCoords = { lat: null, lng: null };
+                calculatedDistance = null;
+                triggerLocationVerification();
+            }
+        }
+
         // Memuat database utama dari Google Sheet di awal
         async function fetchDatabaseFromCloud() {
             if (!googleWebAppUrl) return;
@@ -1000,7 +1036,7 @@
                     if (cloudDB.regus) regus = cloudDB.regus;
                     if (cloudDB.incidentReports) incidentReports = cloudDB.incidentReports;
                     if (cloudDB.guestList) guestList = cloudDB.guestList;
-                    if (cloudDB.geofenceSettings) geofenceSettings = cloudDB.geofenceSettings;
+                    applyCloudGeofence(cloudDB.geofenceSettings);
 
                     if (cloudDB.appHistory) {
                         appHistory = cloudDB.appHistory.map(h => {
@@ -1048,7 +1084,7 @@
                     if (cloudDB.regus) regus = cloudDB.regus;
                     if (cloudDB.incidentReports) incidentReports = cloudDB.incidentReports;
                     if (cloudDB.guestList) guestList = cloudDB.guestList;
-                    if (cloudDB.geofenceSettings) geofenceSettings = cloudDB.geofenceSettings;
+                    applyCloudGeofence(cloudDB.geofenceSettings);
                     
                     if (cloudDB.appHistory) {
                         appHistory = cloudDB.appHistory.map(h => {
@@ -1121,13 +1157,15 @@
             }
 
             updateSyncIndicator('syncing');
+            // Kirim geofenceSettings TANPA simulatedDistanceState (state simulator per perangkat, bukan data global)
+            const { simulatedDistanceState, ...geofenceForCloud } = geofenceSettings;
             const payload = {
                 usersDB,
                 regus,
                 appHistory,
                 incidentReports,
                 guestList,
-                geofenceSettings
+                geofenceSettings: geofenceForCloud
             };
 
             try {
@@ -1172,7 +1210,7 @@
                 regus = JSON.parse(localStorage.getItem("siskamling_backup_regus"));
                 incidentReports = JSON.parse(localStorage.getItem("siskamling_backup_incidents"));
                 guestList = JSON.parse(localStorage.getItem("siskamling_backup_guests"));
-                geofenceSettings = JSON.parse(localStorage.getItem("siskamling_backup_geofence"));
+                applyCloudGeofence(JSON.parse(localStorage.getItem("siskamling_backup_geofence")));
                 
                 const rawHist = JSON.parse(localStorage.getItem("siskamling_backup_history"));
                 appHistory = rawHist.map(h => {
@@ -1239,18 +1277,25 @@
         }
 
         // --- Jadwal Ronda per Kelompok ---
+        // "Malam X" = ronda malam sebelum hari X → presensi pada hari sebelum X
+        // Contoh: malam_minggu → ronda malam Sabtu → presensi hari Sabtu
         function getReguScheduleDay(reguKey) {
             const map = {
-                malam_senin: 1, malam_selasa: 2, malam_rabu: 3, malam_kamis: 4,
-                malam_jumat: 5, malam_sabtu: 6, malam_minggu: 0
+                malam_senin: 0,   // Malam Minggu (malam sebelum Senin) → presensi Minggu
+                malam_selasa: 1,  // Malam Senin → presensi Senin
+                malam_rabu: 2,    // Malam Selasa → presensi Selasa
+                malam_kamis: 3,   // Malam Rabu → presensi Rabu
+                malam_jumat: 4,   // Malam Kamis → presensi Kamis
+                malam_sabtu: 5,   // Malam Jumat → presensi Jumat
+                malam_minggu: 6   // Malam Sabtu → presensi Sabtu
             };
             return map[reguKey] ?? null;
         }
 
         function getReguScheduleDayName(reguKey) {
             const map = {
-                malam_senin: 'Senin', malam_selasa: 'Selasa', malam_rabu: 'Rabu', malam_kamis: 'Kamis',
-                malam_jumat: 'Jumat', malam_sabtu: 'Sabtu', malam_minggu: 'Minggu'
+                malam_senin: 'Minggu', malam_selasa: 'Senin', malam_rabu: 'Selasa', malam_kamis: 'Rabu',
+                malam_jumat: 'Kamis', malam_sabtu: 'Jumat', malam_minggu: 'Sabtu'
             };
             return map[reguKey] || 'Setiap Hari';
         }
@@ -1691,6 +1736,8 @@
             userCurrentCoords = { lat: null, lng: null };
             calculatedDistance = null;
             triggerLocationVerification();
+            // Simpan ke cloud agar semua perangkat warga ikut mati/aktif
+            sendDatabaseToCloud();
         }
 
         // --- Admin Panel Actions ---
@@ -2700,7 +2747,7 @@
                                 <p class="text-xs text-slate-400">Target Lokasi: ${geofenceSettings.name}</p>
                             </div>
                         </div>
-                        <button onclick="triggerLocationVerification()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold py-2 px-4 rounded-lg transition shrink-0">
+                        <button onclick="triggerLocationVerification()" class="btn-touch bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold py-2.5 sm:py-2 px-4 rounded-lg transition shrink-0 w-full sm:w-auto">
                             <i class="fas fa-crosshairs mr-1"></i> Periksa GPS
                         </button>
                     </div>
@@ -2732,7 +2779,7 @@
                                         ${accuracyWarningHtml}
                                     </div>
                                 </div>
-                                <button onclick="triggerLocationVerification()" class="bg-emerald-800 hover:bg-emerald-700 text-white text-[11px] font-semibold py-1.5 px-3 rounded-md transition self-start md:self-auto shrink-0">
+                                <button onclick="triggerLocationVerification()" class="btn-touch bg-emerald-800 hover:bg-emerald-700 text-white text-[11px] font-semibold py-2 sm:py-1.5 px-3 rounded-md transition self-start md:self-auto shrink-0 w-full sm:w-auto">
                                     <i class="fas fa-sync-alt mr-1"></i> Refresh GPS
                                 </button>
                             </div>
@@ -2740,6 +2787,7 @@
                         </div>
                     `;
                 } else {
+                    const distInfo = getDistanceInfo(calculatedDistance, geofenceSettings.radius);
                     widget.className = "mb-5 p-4 rounded-xl border border-red-500/40 bg-red-950/20";
                     content = `
                         <div class="flex flex-col gap-3">
@@ -2756,9 +2804,19 @@
                                         <p class="text-[11px] text-red-400/95 mt-1 font-semibold">⚠️ Anda berada di luar area presensi yang telah ditentukan. Silahkan mendekat ke Pos Ronda.</p>
                                     </div>
                                 </div>
-                                <button onclick="triggerLocationVerification()" class="bg-red-800 hover:bg-red-700 text-white text-[11px] font-semibold py-1.5 px-3 rounded-md transition self-start md:self-auto shrink-0">
+                                <button onclick="triggerLocationVerification()" class="btn-touch bg-red-800 hover:bg-red-700 text-white text-[11px] font-semibold py-2 sm:py-1.5 px-3 rounded-md transition self-start md:self-auto shrink-0 w-full sm:w-auto">
                                     <i class="fas fa-sync-alt mr-1"></i> Refresh GPS
                                 </button>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div class="p-2.5 rounded-lg bg-red-950/40 border border-red-800/50">
+                                    <div class="text-[10px] text-red-300/80 uppercase tracking-wider font-semibold">Jarak ke Area</div>
+                                    <div class="text-lg font-bold text-white mt-0.5">${distInfo.distanceText}</div>
+                                </div>
+                                <div class="p-2.5 rounded-lg bg-red-950/40 border border-red-800/50">
+                                    <div class="text-[10px] text-red-300/80 uppercase tracking-wider font-semibold">Arah ke Pos</div>
+                                    <div class="text-lg font-bold text-white mt-0.5">${distInfo.directionText}</div>
+                                </div>
                             </div>
                             ${geofenceSettings.mockMode ? getMockControlsHTML() : ''}
                         </div>
@@ -2794,9 +2852,7 @@
                 </div>
             `;
         }
-ScheduleDay = isTodayReguSchedule(currentUser.regu);
-            const isInside = calculatedDistance !== null && calculatedDistance <= geofenceSettings.radius;
-            const canPresensi = isScheduleDay && isInside
+
         function setSimulatedLocationState(state) {
             geofenceSettings.simulatedDistanceState = state;
             triggerLocationVerification();
@@ -2812,6 +2868,26 @@ ScheduleDay = isTodayReguSchedule(currentUser.regu);
                       Math.sin(dLon / 2) * Math.sin(dLon / 2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             return R * c; 
+        }
+
+        // Info jarak & arah dari posisi user ke pusat area presensi
+        function getDistanceInfo(distanceMeters, radiusMeters) {
+            const distanceText = distanceMeters >= 1000
+                ? (distanceMeters / 1000).toFixed(2) + ' km'
+                : Math.round(distanceMeters) + ' m';
+
+            let directionText = '—';
+            if (userCurrentCoords.lat !== null && userCurrentCoords.lng !== null) {
+                const dLon = (geofenceSettings.lng - userCurrentCoords.lng) * Math.PI / 180;
+                const y = Math.sin(dLon) * Math.cos(geofenceSettings.lat * Math.PI / 180);
+                const x = Math.cos(userCurrentCoords.lat * Math.PI / 180) * Math.sin(geofenceSettings.lat * Math.PI / 180) -
+                          Math.sin(userCurrentCoords.lat * Math.PI / 180) * Math.cos(geofenceSettings.lat * Math.PI / 180) * Math.cos(dLon);
+                const bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+                const dirs = ['Utara', 'Timur Laut', 'Timur', 'Tenggara', 'Selatan', 'Barat Daya', 'Barat', 'Barat Laut'];
+                directionText = dirs[Math.round(bearing / 45) % 8] + ' (' + Math.round(bearing) + '°)';
+            }
+
+            return { distanceText, directionText };
         }
 
         function requestGeolocationPermission() {
@@ -2850,7 +2926,9 @@ ScheduleDay = isTodayReguSchedule(currentUser.regu);
             let hadirCount = 0;
             document.getElementById('totalAnggota').textContent = activeRegu.members.length;
 
+            const isScheduleDay = isTodayReguSchedule(currentUser.regu);
             const isInside = calculatedDistance !== null && calculatedDistance <= geofenceSettings.radius;
+            const canPresensi = isScheduleDay && isInside;
 
             activeRegu.members.forEach((person, index) => {
                 if (person.status === 'hadir') hadirCount++;
@@ -2864,18 +2942,18 @@ ScheduleDay = isTodayReguSchedule(currentUser.regu);
                 let timeHtml = person.time ? `<span class="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400 ml-2"><i class="far fa-clock"></i> ${person.time}</span>` : '';
                 let selfBadgeHtml = isCurrentUserRow ? `<span class="ml-2 text-[9px] bg-blue-900/80 text-blue-300 border border-blue-700 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Saya</span>` : '';
 
-                let buttcanPresensi= '';
+                let buttonsHtml = '';
                 if (canModifyThisRow) {
-                    if (isInside) {
+                    if (canPresensi) {
                         buttonsHtml = `
-                            <div class="flex gap-1 self-end sm:self-auto">
-                                <button onclick="markAttendance(${index}, 'hadir')" class="px-3 py-1.5 rounded-md text-xs font-semibold transition ${person.status === 'hadir' ? 'bg-green-600 text-white shadow-md shadow-green-600/20 font-bold' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700'}">
+                            <div class="flex gap-1.5 self-end sm:self-auto w-full sm:w-auto">
+                                <button onclick="markAttendance(${index}, 'hadir')" class="btn-touch flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-md text-xs font-semibold transition ${person.status === 'hadir' ? 'bg-green-600 text-white shadow-md shadow-green-600/20 font-bold' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700'}">
                                     Hadir
                                 </button>
-                                <button onclick="markAttendance(${index}, 'izin')" class="px-3 py-1.5 rounded-md text-xs font-semibold transition ${person.status === 'izin' ? 'bg-yellow-600 text-white shadow-md shadow-yellow-600/20 font-bold' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700'}">
+                                <button onclick="markAttendance(${index}, 'izin')" class="btn-touch flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-md text-xs font-semibold transition ${person.status === 'izin' ? 'bg-yellow-600 text-white shadow-md shadow-yellow-600/20 font-bold' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700'}">
                                     Izin
                                 </button>
-                                <button onclick="markAttendance(${index}, 'absen')" class="px-3 py-1.5 rounded-md text-xs font-semibold transition ${person.status === 'absen' ? 'bg-red-600 text-white shadow-md shadow-red-600/20 font-bold' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700'}">
+                                <button onclick="markAttendance(${index}, 'absen')" class="btn-touch flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-md text-xs font-semibold transition ${person.status === 'absen' ? 'bg-red-600 text-white shadow-md shadow-red-600/20 font-bold' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700'}">
                                     Alpha
                                 </button>
                             </div>
@@ -2883,10 +2961,10 @@ ScheduleDay = isTodayReguSchedule(currentUser.regu);
                     } else {
                         buttonsHtml = `
                             <div class="flex flex-col items-end gap-1">
-                                <div class="flex gap-1 opacity-45 cursor-not-allowed">
-                                    <button disabled class="px-3 py-1.5 rounded-md text-xs font-semibold bg-slate-800 text-slate-500 border border-slate-700">Hadir</button>
-                                    <button disabled class="px-3 py-1.5 rounded-md text-xs font-semibold bg-slate-800 text-slate-500 border border-slate-700">Izin</button>
-                                    <button disabled class="px-3 py-1.5 rounded-md text-xs font-semibold bg-slate-800 text-slate-500 border border-slate-700">Alpha</button>
+                                <div class="flex gap-1.5 opacity-45 cursor-not-allowed w-full sm:w-auto">
+                                    <button disabled class="btn-touch flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-md text-xs font-semibold bg-slate-800 text-slate-500 border border-slate-700">Hadir</button>
+                                    <button disabled class="btn-touch flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-md text-xs font-semibold bg-slate-800 text-slate-500 border border-slate-700">Izin</button>
+                                    <button disabled class="btn-touch flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-md text-xs font-semibold bg-slate-800 text-slate-500 border border-slate-700">Alpha</button>
                                 </div>
                                 <span class="text-[10px] text-red-400 font-medium"><i class="fas fa-lock mr-1"></i> Luar Area</span>
                             </div>
@@ -2948,12 +3026,12 @@ ScheduleDay = isTodayReguSchedule(currentUser.regu);
                     </div>
                 `;
                 container.insertBefore(warningDiv, container.firstChild);
-            }canPresensi
+            }
 
             // Kunci tombol Simpan Presensi jika di luar area / belum verifikasi
             const btnSubmit = document.getElementById('btnSubmitPresensi');
             if (btnSubmit) {
-                if (isInside) {
+                if (canPresensi) {
                     btnSubmit.disabled = false;
                     btnSubmit.classList.remove('opacity-50', 'cursor-not-allowed');
                 } else {
