@@ -846,7 +846,8 @@
         // TEMPELKAN URL WEB APP GOOGLE APPS SCRIPT ANDA DI ANTARA TANDA PETIK DI BAWAH:
         // (Sangat direkomendasikan agar HP seluruh warga langsung tersinkron otomatis!)
         // =========================================================================
-        let googleWebAppUrl = "https://script.google.com/macros/s/AKfycbxGmxuh_1cWTSfhVW-OVnRGWE3SsuiNCoUTjIhYK0-Ix6cJTCtLTTsSaC8BpfR6g_WmrQ/exec"; // Contoh: "https://script.google.com/macros/s/.../exec"
+        // URL Google Web App (diisi oleh admin via Pengaturan Cloud, atau di sini default)
+        let googleWebAppUrl = "https://script.google.com/macros/s/AKfycbylhkJ0Q7ZkSXJLNGZzPkT-wDjZM6ujPhwyDfan_X8FG-G-iCCITHTde6yD5iT9b5TiDg/exec";
         
         // --- App Database State (Initialized with Default Data) ---
         
@@ -957,31 +958,49 @@
         let geofenceCircle = null;
 
         // --- LOGIKA CLOUD SINKRONISASI (GOOGLE SHEET - CORE SCRIPT) ---
+
+        // Helper: fetch dengan retry otomatis (Google Apps Script kadang timeout di cold start)
+        async function fetchWithRetry(url, options, retries = 3, delayMs = 1500) {
+            let lastError;
+            for (let attempt = 0; attempt < retries; attempt++) {
+                try {
+                    const res = await fetch(url, options);
+                    if (res.ok) return res;
+                    lastError = new Error("HTTP " + res.status);
+                } catch (err) {
+                    lastError = err;
+                }
+                if (attempt < retries - 1) {
+                    await new Promise(r => setTimeout(r, delayMs * (attempt + 1)));
+                }
+            }
+            throw lastError;
+        }
         
         // Memuat database utama dari Google Sheet di awal
         async function fetchDatabaseFromCloud() {
             if (!googleWebAppUrl) return;
-            
+
             updateSyncIndicator('syncing');
             try {
-                const response = await fetch(googleWebAppUrl, {
+                const response = await fetchWithRetry(googleWebAppUrl, {
                     method: "POST",
                     redirect: "follow",
                     body: JSON.stringify({ action: "getInitialData" })
                 });
-                
+
                 const resData = await response.json();
-                
+
                 if (resData.status === "success" && resData.data) {
                     const cloudDB = resData.data;
-                    
+
                     // Timpa state internal dengan data ter-sinkron dari awan Google
                     if (cloudDB.usersDB) usersDB = cloudDB.usersDB;
                     if (cloudDB.regus) regus = cloudDB.regus;
                     if (cloudDB.incidentReports) incidentReports = cloudDB.incidentReports;
                     if (cloudDB.guestList) guestList = cloudDB.guestList;
                     if (cloudDB.geofenceSettings) geofenceSettings = cloudDB.geofenceSettings;
-                    
+
                     if (cloudDB.appHistory) {
                         appHistory = cloudDB.appHistory.map(h => {
                             h.time = new Date(h.time);
@@ -991,15 +1010,18 @@
 
                     showToast("Database Google Sheets terhubung & sinkron!", "success");
                     updateSyncIndicator('connected');
-                    
+
                     if (currentUser) setupUserUI();
                 } else if (resData.status === "empty") {
                     showToast("Cloud masih kosong. Menginisialisasi data...", "info");
                     await sendDatabaseToCloud();
+                } else {
+                    showToast("Gagal sinkron: " + (resData.message || "respon tidak dikenal"), "error");
+                    updateSyncIndicator('error');
                 }
             } catch (error) {
                 console.error(error);
-                showToast("Koneksi Cloud gagal. Beralih ke mode luring/offline.", "warning");
+                showToast("Koneksi Cloud gagal: " + error.message, "warning");
                 updateSyncIndicator('error');
             }
         }
@@ -1009,7 +1031,7 @@
             if (!googleWebAppUrl) return;
             
             try {
-                const response = await fetch(googleWebAppUrl, {
+                const response = await fetchWithRetry(googleWebAppUrl, {
                     method: "POST",
                     redirect: "follow",
                     body: JSON.stringify({ action: "getInitialData" })
@@ -1108,7 +1130,7 @@
             };
 
             try {
-                const response = await fetch(googleWebAppUrl, {
+                const response = await fetchWithRetry(googleWebAppUrl, {
                     method: "POST",
                     redirect: "follow",
                     body: JSON.stringify({
@@ -1172,7 +1194,7 @@
 
             showToast("Menguji respon script...", "info");
             try {
-                const testFetch = await fetch(googleWebAppUrl, {
+                const testFetch = await fetchWithRetry(googleWebAppUrl, {
                     method: "POST",
                     redirect: "follow",
                     body: JSON.stringify({ action: "getInitialData" })
