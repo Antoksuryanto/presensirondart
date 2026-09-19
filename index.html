@@ -953,6 +953,7 @@
         let geofenceLastPositionAccuracy = null;
         let syncIntervalId = null;
         let attendanceResetIntervalId = null;
+        let isResettingCloud = false;
         let geofenceMap = null;
         let geofenceMarker = null;
         let geofenceCircle = null;
@@ -1080,7 +1081,7 @@
         function startAutoSync() {
             if (syncIntervalId) clearInterval(syncIntervalId);
             syncIntervalId = setInterval(async () => {
-                if (googleWebAppUrl) {
+                if (googleWebAppUrl && !isResettingCloud) {
                     updateSyncIndicator('syncing');
                     await fetchDatabaseFromCloudSilent();
                 }
@@ -1229,7 +1230,35 @@
 
         // --- PROSES AWAL STARTUP ---
         function getAttendanceDayKey() {
-            return new Date().toISOString().slice(0, 10);
+            // Pakai waktu lokal (bukan UTC) agar reset tepat tengah malam WIB
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        // --- Jadwal Ronda per Kelompok ---
+        function getReguScheduleDay(reguKey) {
+            const map = {
+                malam_senin: 1, malam_selasa: 2, malam_rabu: 3, malam_kamis: 4,
+                malam_jumat: 5, malam_sabtu: 6, malam_minggu: 0
+            };
+            return map[reguKey] ?? null;
+        }
+
+        function getReguScheduleDayName(reguKey) {
+            const map = {
+                malam_senin: 'Senin', malam_selasa: 'Selasa', malam_rabu: 'Rabu', malam_kamis: 'Kamis',
+                malam_jumat: 'Jumat', malam_sabtu: 'Sabtu', malam_minggu: 'Minggu'
+            };
+            return map[reguKey] || 'Setiap Hari';
+        }
+
+        function isTodayReguSchedule(reguKey) {
+            const day = getReguScheduleDay(reguKey);
+            if (day === null) return true; // regu tanpa jadwal = bebas
+            return new Date().getDay() === day;
         }
 
         function resetAttendanceStatesIfDayChanged() {
@@ -1255,6 +1284,22 @@
             });
 
             localStorage.setItem('siskamling_attendance_day_key', todayKey);
+
+            // Hapus juga presensi hari ini di cloud agar tidak balik lagi saat auto-sync
+            if (googleWebAppUrl) {
+                isResettingCloud = true;
+                fetchWithRetry(googleWebAppUrl, {
+                    method: "POST",
+                    redirect: "follow",
+                    body: JSON.stringify({ action: "resetTodayAttendance" })
+                }).then(r => r.json()).then(res => {
+                    if (res.status === "success") {
+                        console.log("Presensi cloud hari ini direset.");
+                    }
+                }).catch(err => console.error("Gagal reset cloud:", err))
+                .finally(() => { isResettingCloud = false; });
+            }
+
             if (currentUser && currentUser.role === 'admin') {
                 renderAdminRekap();
             } else if (currentUser && currentUser.role !== 'admin') {
@@ -2495,6 +2540,60 @@
             if (tabId === 'presensi') triggerLocationVerification();
         }
 
+        // Verifikasi lokasi SEGAR saat tombol presensi diklik (anti-bypass jarak cache)
+        function verifyLocationNow() {
+            return new Promise((resolve) => {
+                if (geofenceSettings.mockMode) {
+                    if (geofenceSettings.simulatedDistanceState === "inside") {
+                        userCurrentCoords.lat = geofenceSettings.lat;
+                        userCurrentCoords.lng = geofenceSettings.lng;
+                        calculatedDistance = 0;
+                        geofenceLastPositionAccuracy = 0;
+                    } else {
+                        userCurrentCoords.lat = geofenceSettings.lat + 0.0005;
+                        userCurrentCoords.lng = geofenceSettings.lng + 0.0005;
+                        calculatedDistance = calculateDistance(geofenceSettings.lat, geofenceSettings.lng, userCurrentCoords.lat, userCurrentCoords.lng);
+                        geofenceLastPositionAccuracy = null;
+                    }
+                    updateGeofenceUI();
+                    renderAttendanceList();
+                    resolve(calculatedDistance);
+                    return;
+                }
+
+                if (!navigator.geolocation) {
+                    calculatedDistance = null;
+                    resolve(null);
+                    return;
+                }
+
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        userCurrentCoords.lat = position.coords.latitude;
+                        userCurrentCoords.lng = position.coords.longitude;
+                        geofenceLastPositionAccuracy = position.coords.accuracy ?? null;
+                        calculatedDistance = calculateDistance(
+                            geofenceSettings.lat,
+                            geofenceSettings.lng,
+                            userCurrentCoords.lat,
+                            userCurrentCoords.lng
+                        );
+                        updateGeofenceUI();
+                        renderAttendanceList();
+                        resolve(calculatedDistance);
+                    },
+                    () => {
+                        geofenceLastPositionAccuracy = null;
+                        calculatedDistance = null;
+                        updateGeofenceUI();
+                        renderAttendanceList();
+                        resolve(null);
+                    },
+                    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+                );
+            });
+        }
+
         // Verifikasi Lokasi Geofencing GPS
         async function triggerLocationVerification() {
             if (geofenceSettings.mockMode) {
@@ -2668,6 +2767,13 @@
             }
 
             widget.innerHTML = content;
+
+            if (geofenceSettings.mockMode) {
+                const mockWarn = document.createElement('div');
+                mockWarn.className = "mt-2 p-2 rounded-lg bg-amber-950/40 border border-amber-800 text-amber-300 text-[10px] font-semibold flex items-center gap-2";
+                mockWarn.innerHTML = '<i class="fas fa-vial"></i> MODE SIMULASI GPS AKTIF — lokasi memakai simulator, bukan sensor asli. Matikan di Pengaturan Pos untuk penguncian GPS nyata.';
+                widget.appendChild(mockWarn);
+            }
         }
 
         function getMockControlsHTML() {
@@ -2688,7 +2794,9 @@
                 </div>
             `;
         }
-
+ScheduleDay = isTodayReguSchedule(currentUser.regu);
+            const isInside = calculatedDistance !== null && calculatedDistance <= geofenceSettings.radius;
+            const canPresensi = isScheduleDay && isInside
         function setSimulatedLocationState(state) {
             geofenceSettings.simulatedDistanceState = state;
             triggerLocationVerification();
@@ -2756,7 +2864,7 @@
                 let timeHtml = person.time ? `<span class="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400 ml-2"><i class="far fa-clock"></i> ${person.time}</span>` : '';
                 let selfBadgeHtml = isCurrentUserRow ? `<span class="ml-2 text-[9px] bg-blue-900/80 text-blue-300 border border-blue-700 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Saya</span>` : '';
 
-                let buttonsHtml = '';
+                let buttcanPresensi= '';
                 if (canModifyThisRow) {
                     if (isInside) {
                         buttonsHtml = `
@@ -2816,22 +2924,42 @@
                 container.appendChild(el);
             });
 
-            if (!isInside) {
+            if (!canPresensi) {
                 const warningDiv = document.createElement('div');
+                let warnTitle, warnDesc;
+                if (!isScheduleDay) {
+                    warnTitle = 'Hari ini bukan jadwal ronda kelompok Anda!';
+                    warnDesc = `Kelompok <strong class="text-white">${activeRegu.name}</strong> bertugas pada hari <strong class="text-white">${getReguScheduleDayName(currentUser.regu)}</strong>. Presensi mandiri hanya dapat dilakukan pada hari jadwal ronda kelompok Anda.`;
+                } else if (calculatedDistance === null) {
+                    warnTitle = 'Lokasi Anda belum terverifikasi!';
+                    warnDesc = 'Akses presensi mandiri Anda terkunci. Klik <strong class="text-white">"Periksa GPS"</strong> untuk memverifikasi lokasi Anda terlebih dahulu.';
+                } else {
+                    warnTitle = 'Anda berada di luar area presensi yang telah ditentukan!';
+                    warnDesc = `Akses presensi mandiri Anda terkunci. Untuk melakukan presensi, Anda wajib mendekat ke titik <strong class="text-white">${geofenceSettings.name}</strong> dengan jangkauan maksimal <strong class="text-white">${geofenceSettings.radius} meter</strong>. Jarak Anda saat ini: <strong class="text-white">${calculatedDistance.toFixed(1)} meter</strong>.`;
+                }
                 warningDiv.className = "p-4 mb-4 rounded-xl bg-red-950/40 border border-red-800 text-red-200 text-xs flex items-start gap-3 shadow-lg shadow-red-950/20 animate-pulse";
                 warningDiv.innerHTML = `
                     <div class="p-2 rounded-lg bg-red-900/50 text-red-400 shrink-0">
                         <i class="fas fa-ban text-lg"></i>
                     </div>
                     <div>
-                        <h4 class="font-bold text-sm text-red-400 uppercase mb-0.5 tracking-wide">Anda berada di luar area presensi yang telah ditentukan!</h4>
-                        <p class="text-slate-300 leading-relaxed">
-                            Akses presensi mandiri Anda terkunci. Untuk melakukan presensi, Anda wajib mendekat ke titik <strong class="text-white">${geofenceSettings.name}</strong> dengan jangkauan maksimal <strong class="text-white">${geofenceSettings.radius} meter</strong>. 
-                            Jarak Anda saat ini: <strong class="text-white">${calculatedDistance ? calculatedDistance.toFixed(1) + ' meter' : 'tidak terdeteksi'}</strong>.
-                        </p>
+                        <h4 class="font-bold text-sm text-red-400 uppercase mb-0.5 tracking-wide">${warnTitle}</h4>
+                        <p class="text-slate-300 leading-relaxed">${warnDesc}</p>
                     </div>
                 `;
                 container.insertBefore(warningDiv, container.firstChild);
+            }canPresensi
+
+            // Kunci tombol Simpan Presensi jika di luar area / belum verifikasi
+            const btnSubmit = document.getElementById('btnSubmitPresensi');
+            if (btnSubmit) {
+                if (isInside) {
+                    btnSubmit.disabled = false;
+                    btnSubmit.classList.remove('opacity-50', 'cursor-not-allowed');
+                } else {
+                    btnSubmit.disabled = true;
+                    btnSubmit.classList.add('opacity-50', 'cursor-not-allowed');
+                }
             }
 
             document.getElementById('countHadir').textContent = hadirCount;
@@ -2847,12 +2975,18 @@
             }
         }
 
-        function markAttendance(index, status) {
-            if (calculatedDistance === null) {
-                showToast("Ditolak! Aktifkan/Verifikasi GPS Anda terlebih dahulu.", "error");
+        async function markAttendance(index, status) {
+            if (!isTodayReguSchedule(currentUser.regu)) {
+                showToast("Ditolak! Hari ini bukan jadwal ronda kelompok Anda.", "error");
                 return;
             }
-            if (calculatedDistance > geofenceSettings.radius) {
+
+            const dist = await verifyLocationNow();
+            if (dist === null) {
+                showToast("Ditolak! Verifikasi lokasi GPS Anda terlebih dahulu.", "error");
+                return;
+            }
+            if (dist > geofenceSettings.radius) {
                 showToast("Presensi ditolak! Anda berada di luar area presensi yang ditentukan.", "error");
                 return;
             }
@@ -2876,13 +3010,18 @@
             sendDatabaseToCloud();
         }
 
-        function submitAllAttendance() {
-            if (calculatedDistance === null) {
-                showToast("Aksi Ditolak! Harap lakukan verifikasi lokasi Anda terlebih dahulu.", "error");
+        async function submitAllAttendance() {
+            if (!isTodayReguSchedule(currentUser.regu)) {
+                showToast("Aksi Ditolak! Hari ini bukan jadwal ronda kelompok Anda.", "error");
                 return;
             }
 
-            if (calculatedDistance > geofenceSettings.radius) {
+            const dist = await verifyLocationNow();
+            if (dist === null) {
+                showToast("Aksi Ditolak! Verifikasi lokasi GPS Anda terlebih dahulu.", "error");
+                return;
+            }
+            if (dist > geofenceSettings.radius) {
                 showToast("Presensi ditolak! Anda berada di luar area presensi yang ditentukan.", "error");
                 return;
             }
