@@ -11,6 +11,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <!-- Library Ekspor Laporan: PDF (jsPDF + autoTable) dan Excel (SheetJS) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         body {
@@ -191,6 +195,9 @@
                 <button onclick="switchAdminTab('laporan')" id="tab-admin-laporan" class="admin-tab-btn text-slate-400 hover:text-slate-200 px-4 py-2 font-medium transition flex items-center gap-2 text-sm whitespace-nowrap">
                     <i class="fas fa-clipboard-list"></i> Kejadian & Tamu
                 </button>
+                <button onclick="switchAdminTab('laporanexport')" id="tab-admin-laporanexport" class="admin-tab-btn text-slate-400 hover:text-slate-200 px-4 py-2 font-medium transition flex items-center gap-2 text-sm whitespace-nowrap">
+                    <i class="fas fa-file-export"></i> Laporan & Ekspor
+                </button>
                 <button onclick="switchAdminTab('pengaturan')" id="tab-admin-pengaturan" class="admin-tab-btn text-slate-400 hover:text-slate-200 px-4 py-2 font-medium transition flex items-center gap-2 text-sm whitespace-nowrap">
                     <i class="fas fa-map-marked-alt"></i> Pengaturan Pos & Cloud
                 </button>
@@ -220,14 +227,14 @@
                                 <input type="text" id="newMemberName" required placeholder="Contoh: Joko Widodo" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
                             </div>
                             <div>
-                                <label class="block text-sm text-slate-400 mb-1">Peran di Kelompok</label>
+                                <label for="newMemberRole" class="block text-sm text-slate-400 mb-1">Peran di Kelompok</label>
                                 <select id="newMemberRole" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
                                     <option value="Anggota">Anggota</option>
                                     <option value="Wakil Ketua">Wakil Ketua Kelompok</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="block text-sm text-slate-400 mb-1">Pilih Kelompok</label>
+                                <label for="newMemberRegu" class="block text-sm text-slate-400 mb-1">Pilih Kelompok</label>
                                 <select id="newMemberRegu" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
                                     <option value="malam_senin">Kelompok Malam Senin</option>
                                     <option value="malam_selasa">Kelompok Malam Selasa</option>
@@ -280,7 +287,7 @@
                         
                         <form id="createAccountForm" onsubmit="handleCreateAccount(event)" class="space-y-4">
                             <div>
-                                <label class="block text-sm text-slate-400 mb-1">Pilih Anggota Ronda Malam</label>
+                                <label for="accMemberSelect" class="block text-sm text-slate-400 mb-1">Pilih Anggota Ronda Malam</label>
                                 <select id="accMemberSelect" onchange="handleAccMemberSelectChange(this.value)" required class="w-full bg-[#111827] border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500">
                                     <!-- Populated dynamically -->
                                 </select>
@@ -306,7 +313,7 @@
 
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label class="block text-sm text-slate-400 mb-1">Role Login</label>
+                                    <label for="accRole" class="block text-sm text-slate-400 mb-1">Role Login</label>
                                     <select id="accRole" required class="w-full bg-[#111827] border border-[#223147] rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
                                         <option value="peserta">PESERTA (Self-Only)</option>
                                         <option value="ketua">KETUA KELOMPOK (Self-Only)</option>
@@ -314,8 +321,8 @@
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="block text-sm text-slate-400 mb-1">Nama Kelompok</label>
-                                    <input type="text" id="accReguLabel" disabled class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm text-slate-500 cursor-not-allowed">
+                                    <label for="accReguLabel" class="block text-sm text-slate-400 mb-1">Nama Kelompok</label>
+                                    <input type="text" id="accReguLabel" disabled placeholder="Nama kelompok" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm text-slate-500 cursor-not-allowed">
                                     <input type="hidden" id="accReguKey">
                                 </div>
                             </div>
@@ -391,7 +398,65 @@
                 </div>
             </section>
 
-            <!-- Tab 5: Pengaturan Pos & Cloud Database -->
+            <!-- Tab 5: Laporan & Ekspor (PDF / Excel) -->
+            <section id="sec-admin-laporanexport" class="admin-section hidden">
+                <div class="bg-slate-800 rounded-xl p-4 md:p-6 shadow-lg border border-slate-700">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+                        <div>
+                            <h2 class="text-lg font-bold flex items-center gap-2 text-rose-400">
+                                <i class="fas fa-file-pdf"></i> Pusat Laporan & Ekspor Data
+                            </h2>
+                            <p class="text-sm text-slate-400">Pilih jenis laporan, lalu unduh dalam format PDF atau Excel (.xlsx).</p>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="exportLaporanPDF()" class="bg-red-600 hover:bg-red-500 text-white text-xs font-semibold py-2 px-3.5 rounded-lg transition flex items-center gap-1.5 shadow-md shadow-red-600/10">
+                                <i class="fas fa-file-pdf"></i> Ekspor PDF
+                            </button>
+                            <button onclick="exportLaporanExcel()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-2 px-3.5 rounded-lg transition flex items-center gap-1.5 shadow-md shadow-emerald-600/10">
+                                <i class="fas fa-file-excel"></i> Ekspor Excel (.xlsx)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Filter Jenis Laporan -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                        <div>
+                            <label for="laporanJenis" class="block text-sm text-slate-400 mb-1">Jenis Laporan</label>
+                            <select id="laporanJenis" onchange="renderLaporanPreview()" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                                <option value="presensi">Rekap Presensi Ronda</option>
+                                <option value="kejadian">Laporan Kejadian</option>
+                                <option value="tamu">Buku Tamu & Kendaraan</option>
+                                <option value="log">Log Aktivitas / Riwayat</option>
+                                <option value="akun">Daftar Akun Login</option>
+                                <option value="gabungan">Laporan Gabungan (Semua Data)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="laporanFrom" class="block text-sm text-slate-400 mb-1">Dari Tanggal</label>
+                            <input type="date" id="laporanFrom" onchange="renderLaporanPreview()" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label for="laporanTo" class="block text-sm text-slate-400 mb-1">Sampai Tanggal</label>
+                            <input type="date" id="laporanTo" onchange="renderLaporanPreview()" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                        </div>
+                    </div>
+
+                    <!-- Pratinjau Laporan -->
+                    <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-3 sm:p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-bold text-slate-300 flex items-center gap-2">
+                                <i class="fas fa-eye text-slate-500"></i> Pratinjau Laporan
+                            </h3>
+                            <span id="laporanGeneratedAt" class="text-[11px] text-slate-500 font-mono"></span>
+                        </div>
+                        <div class="overflow-x-auto" id="laporanPreviewContainer">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab 6: Pengaturan Pos & Cloud Database -->
             <section id="sec-admin-pengaturan" class="admin-section hidden">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <!-- Left: Coordinates config -->
@@ -401,16 +466,16 @@
                         </h2>
                         <div class="space-y-4">
                             <div>
-                                <label class="block text-sm text-slate-400 mb-1">Nama Titik Lokasi</label>
+                                <label for="cfgPosName" class="block text-sm text-slate-400 mb-1">Nama Titik Lokasi</label>
                                 <input type="text" id="cfgPosName" value="Angkringan pak santo" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
                             </div>
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label class="block text-sm text-slate-400 mb-1">Latitude (Lintang)</label>
+                                    <label for="cfgPosLat" class="block text-sm text-slate-400 mb-1">Latitude (Lintang)</label>
                                     <input type="number" step="any" id="cfgPosLat" value="-7.7820628" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm text-slate-400 mb-1">Longitude (Bujur)</label>
+                                    <label for="cfgPosLng" class="block text-sm text-slate-400 mb-1">Longitude (Bujur)</label>
                                     <input type="number" step="any" id="cfgPosLng" value="110.3030864" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
                                 </div>
                             </div>
@@ -422,7 +487,7 @@
                             <hr class="border-slate-700 my-2">
 
                             <div>
-                                <label class="block text-sm text-slate-400 mb-1">Batas Radius Toleransi (Meter)</label>
+                                <label for="cfgPosRadius" class="block text-sm text-slate-400 mb-1">Batas Radius Toleransi (Meter)</label>
                                 <div class="flex items-center gap-3">
                                     <input type="number" id="cfgPosRadius" value="4" class="w-24 bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
                                     <span class="text-sm text-slate-400">Meter dari pusat koordinat</span>
@@ -474,7 +539,7 @@
                             <div class="flex items-center justify-between">
                                 <span class="text-xs text-slate-300 font-semibold">Gunakan Posisi Simulasi</span>
                                 <label class="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" id="cfgMockToggle" checked onchange="toggleMockMode(this.checked)" class="sr-only peer">
+                                    <input type="checkbox" id="cfgMockToggle" checked onchange="toggleMockMode(this.checked)" aria-label="Gunakan Posisi Simulasi" class="sr-only peer">
                                     <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                                 </label>
                             </div>
@@ -570,7 +635,7 @@
                     
                     <form id="formLaporan" onsubmit="handleLaporanSubmit(event)">
                         <div class="mb-4">
-                            <label class="block text-sm text-slate-400 mb-1">Jenis Kejadian</label>
+                            <label for="kategoriLaporan" class="block text-sm text-slate-400 mb-1">Jenis Kejadian</label>
                             <select id="kategoriLaporan" required class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
                                 <option value="">Pilih Kategori...</option>
                                 <option value="Mencurigakan">Orang Mencurigakan</option>
@@ -619,7 +684,7 @@
                                 <input type="text" id="platTamu" required placeholder="Contoh: B 1234 XYZ / Gojek" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-sm text-white uppercase focus:outline-none focus:border-blue-500 font-bold">
                             </div>
                             <div>
-                                <label class="block text-sm text-slate-400 mb-1">Jenis Kendaraan</label>
+                                <label for="jenisKendaraan" class="block text-sm text-slate-400 mb-1">Jenis Kendaraan</label>
                                 <select id="jenisKendaraan" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
                                     <option value="Motor">Sepeda Motor</option>
                                     <option value="Mobil">Mobil</option>
@@ -653,7 +718,7 @@
                         <h2 class="text-lg font-bold flex items-center gap-2 text-teal-400">
                             <i class="fas fa-book"></i> Logbook Aktivitas Malam Ini
                         </h2>
-                        <button onclick="renderHistory()" class="text-slate-400 hover:text-white transition">
+                        <button onclick="renderHistory()" title="Muat ulang log" aria-label="Muat ulang log" class="text-slate-400 hover:text-white transition">
                             <i class="fas fa-sync-alt"></i>
                         </button>
                     </div>
@@ -665,7 +730,7 @@
             </section>
             
             <!-- PANIC BUTTON FLOATING -->
-            <button onclick="triggerPanic()" class="fixed bottom-24 right-4 md:bottom-8 md:right-8 w-16 h-16 bg-red-600 rounded-full shadow-2xl flex items-center justify-center text-white text-3xl z-40 panic-btn-animate hover:bg-red-500 transition">
+            <button onclick="triggerPanic()" title="Tombol darurat" aria-label="Tombol darurat" class="fixed bottom-24 right-4 md:bottom-8 md:right-8 w-16 h-16 bg-red-600 rounded-full shadow-2xl flex items-center justify-center text-white text-3xl z-40 panic-btn-animate hover:bg-red-500 transition">
                 <i class="fas fa-bell"></i>
             </button>
         </main>
@@ -699,15 +764,15 @@
             </h2>
             <form id="changePasswordForm" onsubmit="handleChangePassword(event)" class="space-y-4">
                 <div>
-                    <label class="block text-sm text-slate-400 mb-1">Password Lama</label>
+                    <label for="oldPassword" class="block text-sm text-slate-400 mb-1">Password Lama</label>
                     <input type="password" id="oldPassword" required class="w-full bg-[#111827] border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-400 mb-1">Password Baru</label>
+                    <label for="newPassword" class="block text-sm text-slate-400 mb-1">Password Baru</label>
                     <input type="password" id="newPassword" required class="w-full bg-[#111827] border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-400 mb-1">Konfirmasi Password Baru</label>
+                    <label for="confirmPassword" class="block text-sm text-slate-400 mb-1">Konfirmasi Password Baru</label>
                     <input type="password" id="confirmPassword" required class="w-full bg-[#111827] border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
                 </div>
                 <div class="flex gap-3 pt-4 border-t border-slate-700 mt-6">
@@ -732,11 +797,11 @@
                 <input type="hidden" id="editMemberReguId">
                 <input type="hidden" id="editMemberIndex">
                 <div>
-                    <label class="block text-sm text-slate-400 mb-1">Nama Lengkap</label>
+                    <label for="editMemberName" class="block text-sm text-slate-400 mb-1">Nama Lengkap</label>
                     <input type="text" id="editMemberName" required class="w-full bg-[#111827] border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-400 mb-1">Pilih Kelompok Ronda Malam</label>
+                    <label for="editMemberReguSelect" class="block text-sm text-slate-400 mb-1">Pilih Kelompok Ronda Malam</label>
                     <select id="editMemberReguSelect" class="w-full bg-[#111827] border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
                         <option value="malam_senin">Kelompok Malam Senin</option>
                         <option value="malam_selasa">Kelompok Malam Selasa</option>
@@ -749,7 +814,7 @@
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-sm text-slate-400 mb-1">Status Kehadiran</label>
+                        <label for="editMemberStatus" class="block text-sm text-slate-400 mb-1">Status Kehadiran</label>
                         <select id="editMemberStatus" class="w-full bg-[#111827] border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
                             <option value="none">Belum Ronda</option>
                             <option value="hadir">Hadir</option>
@@ -784,11 +849,11 @@
                 <input type="hidden" id="editMemberReguKey">
                 <input type="hidden" id="editMemberIndex">
                 <div>
-                    <label class="block text-sm text-slate-400 mb-1">Nama Lengkap</label>
+                    <label for="editMemberNameInput" class="block text-sm text-slate-400 mb-1">Nama Lengkap</label>
                     <input type="text" id="editMemberNameInput" required class="w-full bg-[#111827] border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-400 mb-1">Peran di Kelompok</label>
+                    <label for="editMemberRoleSelect" class="block text-sm text-slate-400 mb-1">Peran di Kelompok</label>
                     <select id="editMemberRoleSelect" class="w-full bg-[#111827] border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
                         <option value="Anggota">Anggota</option>
                         <option value="Wakil Ketua">Wakil Ketua Kelompok</option>
@@ -796,7 +861,7 @@
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-400 mb-1">Pindah ke Kelompok</label>
+                    <label for="editMemberGroupSelect" class="block text-sm text-slate-400 mb-1">Pindah ke Kelompok</label>
                     <select id="editMemberGroupSelect" class="w-full bg-[#111827] border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition"></select>
                 </div>
                 <div class="flex gap-3 pt-4 border-t border-slate-700 mt-6">
@@ -952,6 +1017,10 @@
             { id: 1, plat: "B 1928 SGJ", jenis: "Mobil", tujuan: "Rumah Bpk. Rudi No. 12", time: "22:15" }
         ];
 
+        // Riwayat presensi per tanggal (untuk laporan historis)
+        // Format: { date: "2026-09-19", reguKey: "malam_senin", memberName: "Budi Santoso", status: "hadir", time: "21:30" }
+        let attendanceHistory = [];
+
         let geofenceSettings = {
             lat: -7.7820628,    // Pusat koordinat presensi
             lng: 110.3030864,   // Pusat koordinat presensi
@@ -1036,6 +1105,13 @@
                     if (cloudDB.regus) regus = cloudDB.regus;
                     if (cloudDB.incidentReports) incidentReports = cloudDB.incidentReports;
                     if (cloudDB.guestList) guestList = cloudDB.guestList;
+                    if (cloudDB.attendanceHistory) {
+                        attendanceHistory = normalizeAttendanceHistory(cloudDB.attendanceHistory);
+                        console.log('[SYNC] attendanceHistory dari cloud:', cloudDB.attendanceHistory.length, 'baris mentah');
+                        console.log('[SYNC] attendanceHistory normalisasi:', attendanceHistory.length, 'baris', attendanceHistory.slice(0, 3));
+                    } else {
+                        console.log('[SYNC] cloudDB.attendanceHistory TIDAK ADA di respon cloud');
+                    }
                     applyCloudGeofence(cloudDB.geofenceSettings);
 
                     if (cloudDB.appHistory) {
@@ -1048,7 +1124,10 @@
                     showToast("Database Google Sheets terhubung & sinkron!", "success");
                     updateSyncIndicator('connected');
 
+                    // Cadangkan juga ke localStorage agar sesi/akun bisa dipulihkan tuntas
+                    saveToLocalStorageBackup();
                     if (currentUser) setupUserUI();
+                    restoreSession();
                 } else if (resData.status === "empty") {
                     showToast("Cloud masih kosong. Menginisialisasi data...", "info");
                     await sendDatabaseToCloud();
@@ -1084,6 +1163,7 @@
                     if (cloudDB.regus) regus = cloudDB.regus;
                     if (cloudDB.incidentReports) incidentReports = cloudDB.incidentReports;
                     if (cloudDB.guestList) guestList = cloudDB.guestList;
+                    if (cloudDB.attendanceHistory) attendanceHistory = normalizeAttendanceHistory(cloudDB.attendanceHistory);
                     applyCloudGeofence(cloudDB.geofenceSettings);
                     
                     if (cloudDB.appHistory) {
@@ -1100,6 +1180,9 @@
                             renderAdminRekap();
                             renderAdminReports();
                             renderAdminAkunTable();
+                            // Refresh pratinjau laporan hanya jika tab-nya sedang terbuka
+                            const secLap = document.getElementById('sec-admin-laporanexport');
+                            if (secLap && !secLap.classList.contains('hidden')) renderLaporanPreview();
                         } else {
                             renderAttendanceList();
                             renderGuestList();
@@ -1107,6 +1190,7 @@
                         }
                     }
                     updateSyncIndicator('connected');
+                    restoreSession();
                 }
             } catch (error) {
                 console.error("Silent sync failed:", error);
@@ -1165,6 +1249,7 @@
                 appHistory,
                 incidentReports,
                 guestList,
+                attendanceHistory,
                 geofenceSettings: geofenceForCloud
             };
 
@@ -1201,6 +1286,7 @@
             localStorage.setItem("siskamling_backup_history", JSON.stringify(appHistory));
             localStorage.setItem("siskamling_backup_incidents", JSON.stringify(incidentReports));
             localStorage.setItem("siskamling_backup_guests", JSON.stringify(guestList));
+            localStorage.setItem("siskamling_backup_attendance_history", JSON.stringify(attendanceHistory));
             localStorage.setItem("siskamling_backup_geofence", JSON.stringify(geofenceSettings));
         }
 
@@ -1210,6 +1296,9 @@
                 regus = JSON.parse(localStorage.getItem("siskamling_backup_regus"));
                 incidentReports = JSON.parse(localStorage.getItem("siskamling_backup_incidents"));
                 guestList = JSON.parse(localStorage.getItem("siskamling_backup_guests"));
+                if (localStorage.getItem("siskamling_backup_attendance_history")) {
+                    attendanceHistory = JSON.parse(localStorage.getItem("siskamling_backup_attendance_history"));
+                }
                 applyCloudGeofence(JSON.parse(localStorage.getItem("siskamling_backup_geofence")));
                 
                 const rawHist = JSON.parse(localStorage.getItem("siskamling_backup_history"));
@@ -1274,6 +1363,28 @@
             const m = String(now.getMonth() + 1).padStart(2, '0');
             const d = String(now.getDate()).padStart(2, '0');
             return `${y}-${m}-${d}`;
+        }
+
+        // Transformasi data attendanceHistory dari format cloud (kolom sheet) ke format internal app
+        function normalizeAttendanceHistory(cloudData) {
+            if (!Array.isArray(cloudData)) return [];
+            return cloudData.map(item => ({
+                date: item.date,
+                reguKey: item.reguKey || item.regu_key || '',
+                reguName: item.reguName || item.regu_name || '',
+                memberName: item.memberName || item.member_name || '',
+                status: item.status,
+                time: item.time || null
+            })).filter(h => h.date && h.reguKey && h.memberName);
+        }
+
+        // Rekam presensi ke histori per tanggal (untuk laporan historis)
+        function recordAttendanceHistory(reguKey, memberName, status, time) {
+            if (!reguKey || !memberName || !status || status === 'none') return;
+            const date = getAttendanceDayKey();
+            // Hapus entri lama untuk (tanggal, regu, nama) lalu simpan yang baru
+            attendanceHistory = attendanceHistory.filter(h => !(h.date === date && h.reguKey === reguKey && h.memberName === memberName));
+            attendanceHistory.push({ date, reguKey, memberName, status, time: time || null });
         }
 
         // --- Jadwal Ronda per Kelompok ---
@@ -1389,6 +1500,7 @@
                 loadFromLocalStorageBackup();
                 updateSyncIndicator('offline');
             }
+            restoreSession();
 
             // Set input admin koordinat bawaan
             if(document.getElementById('cfgPosLat')) {
@@ -1434,6 +1546,7 @@
                     ...usersDB[normalizedUser]
                 };
 
+                localStorage.setItem("siskamling_session_user", normalizedUser);
                 document.getElementById('loginScreen').classList.add('hidden');
                 document.getElementById('appScreen').classList.remove('hidden');
 
@@ -1446,11 +1559,32 @@
 
         function handleLogout() {
             currentUser = null;
+            localStorage.removeItem("siskamling_session_user");
             document.getElementById('appScreen').classList.add('hidden');
             document.getElementById('loginScreen').classList.remove('hidden');
             document.getElementById('loginForm').reset();
             showToast("Anda telah keluar dari sistem.", "info");
         }
+
+        // Pulihkan sesi login setelah refresh (tanpa perlu login ulang)
+        function restoreSession() {
+            if (currentUser) return;
+            const saved = localStorage.getItem("siskamling_session_user");
+            if (!saved || !usersDB[saved]) return;
+            currentUser = { username: saved, ...usersDB[saved] };
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('appScreen').classList.remove('hidden');
+            try {
+                setupUserUI();
+            } catch (err) {
+                console.error('Gagal memuat UI sesi:', err);
+            }
+        }
+
+        // Pulihkan SEGERA saat script dimuat (elemen HTML sudah ada karena script di akhir body),
+        // sehingga halaman login tidak pernah sempat tampil saat refresh.
+        loadFromLocalStorageBackup();
+        restoreSession();
 
         function openChangePasswordModal() {
             const modal = document.getElementById('changePasswordModal');
@@ -1517,8 +1651,10 @@
                 adminContainer.classList.remove('hidden');
                 ketuaContainer.classList.add('hidden');
                 mobileBottomNav.classList.add('hidden');
-                
-                switchAdminTab('regu');
+
+                const savedAdminTab = localStorage.getItem("siskamling_active_admin_tab") || 'regu';
+                const adminTabEl = document.getElementById(`sec-admin-${savedAdminTab}`);
+                switchAdminTab(adminTabEl ? savedAdminTab : 'regu');
                 renderAdminReguList();
                 renderAdminRekap();
                 renderAdminReports();
@@ -1558,7 +1694,9 @@
                 ketuaContainer.classList.remove('hidden');
                 mobileBottomNav.classList.remove('hidden');
 
-                switchKetuaTab('presensi');
+                const savedKetuaTab = localStorage.getItem("siskamling_active_ketua_tab") || 'presensi';
+                const ketuaTabEl = document.getElementById(`sec-ketua-${savedKetuaTab}`);
+                switchKetuaTab(ketuaTabEl ? savedKetuaTab : 'presensi');
                 triggerLocationVerification();
                 renderAttendanceList();
                 renderGuestList();
@@ -1662,8 +1800,11 @@
                 activeBtn.classList.remove('text-slate-400');
             }
 
+            localStorage.setItem("siskamling_active_admin_tab", tabId);
+
             if (tabId === 'rekap') renderAdminRekap();
             if (tabId === 'laporan') renderAdminReports();
+            if (tabId === 'laporanexport') renderLaporanPreview();
             if (tabId === 'akun') {
                 renderAdminAkunTable();
                 populateAccMemberSelect();
@@ -2012,6 +2153,7 @@
             const oldStatus = member.status;
             member.status = newStatus;
             member.time = newStatus !== 'none' ? timeStr : null;
+            recordAttendanceHistory(reguId, member.name, newStatus, member.time);
             
             showToast("Status " + member.name + " diubah menjadi " + newStatus.toUpperCase() + "!", "success");
             addToHistory('fa-user-cog', 'text-amber-400', 'Presensi Diubah Admin', "Admin RT merubah kehadiran " + member.name + " (" + regus[reguId].name + ") dari " + oldStatus.toUpperCase() + " menjadi " + newStatus.toUpperCase() + ".");
@@ -2058,6 +2200,7 @@
             member.name = newName;
             member.status = newStatus;
             member.time = newStatus !== 'none' ? (newTime || new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })) : null;
+            recordAttendanceHistory(newReguId, newName, newStatus, member.time);
 
             // Jika kelompok diganti
             if (oldReguId !== newReguId) {
@@ -2491,6 +2634,222 @@
             printWindow.document.close();
         }
 
+        // --- MENU LAPORAN & EKSPOR (PDF / EXCEL) ---
+        // Mengumpulkan data laporan sesuai jenis yang dipilih admin
+        function buildLaporanData(jenis) {
+            const sections = [];
+            const statusText = s => s === 'hadir' ? 'Hadir' : s === 'izin' ? 'Izin' : s === 'absen' ? 'Alpha' : 'Belum Ronda';
+            const from = document.getElementById('laporanFrom')?.value;
+            const to = document.getElementById('laporanTo')?.value;
+            console.log('[LAPORAN] jenis:', jenis, '| from:', from, '| to:', to, '| attendanceHistory.length:', attendanceHistory.length);
+            if (attendanceHistory.length > 0) console.log('[LAPORAN] sample:', attendanceHistory[0]);
+
+            if (jenis === 'presensi' || jenis === 'gabungan') {
+                const rows = [];
+                // Jika filter tanggal diisi → tampilkan histori presensi per tanggal
+                if (from || to) {
+                    const filtered = attendanceHistory.filter(h => {
+                        if (from && h.date < from) return false;
+                        if (to && h.date > to) return false;
+                        return true;
+                    });
+                    // Urutkan per tanggal lalu per kelompok
+                    filtered.sort((a, b) => (a.date + a.reguKey).localeCompare(b.date + b.reguKey));
+                    filtered.forEach(h => {
+                        const reguName = (h.reguName && h.reguName !== h.reguKey) ? h.reguName : (regus[h.reguKey] ? regus[h.reguKey].name : h.reguKey);
+                        rows.push([h.date, h.memberName, reguName, statusText(h.status), h.time || '-']);
+                    });
+                    sections.push({ key: 'presensi', title: 'Rekap Presensi Ronda (Historis)', head: ['Tanggal', 'Nama Lengkap', 'Kelompok', 'Status', 'Jam Check-In'], rows });
+                } else {
+                    // Tanpa filter → status hari ini
+                    for (const regu of Object.values(regus)) {
+                        regu.members.forEach(m => rows.push([m.name, regu.name, statusText(m.status), m.time || '-']));
+                    }
+                    sections.push({ key: 'presensi', title: 'Rekap Presensi Ronda (Hari Ini)', head: ['Nama Lengkap', 'Kelompok', 'Status', 'Jam Check-In'], rows });
+                }
+            }
+            if (jenis === 'kejadian' || jenis === 'gabungan') {
+                sections.push({
+                    key: 'kejadian', title: 'Laporan Kejadian',
+                    head: ['Pelapor', 'Kategori', 'Lokasi', 'Deskripsi', 'Waktu'],
+                    rows: incidentReports.map(r => [r.reporter, r.kategori, r.lokasi, r.deskripsi, r.time])
+                });
+            }
+            if (jenis === 'tamu' || jenis === 'gabungan') {
+                sections.push({
+                    key: 'tamu', title: 'Buku Tamu & Kendaraan',
+                    head: ['Plat / Identitas', 'Jenis', 'Tujuan', 'Waktu'],
+                    rows: guestList.map(g => [g.plat, g.jenis, g.tujuan, g.time])
+                });
+            }
+            if (jenis === 'log' || jenis === 'gabungan') {
+                const filtered = appHistory.filter(h => {
+                    const d = new Date(h.time);
+                    const key = d.toISOString().slice(0, 10);
+                    if (from && key < from) return false;
+                    if (to && key > to) return false;
+                    return true;
+                });
+                sections.push({
+                    key: 'log', title: 'Log Aktivitas / Riwayat',
+                    head: ['Tanggal & Waktu', 'Aktivitas', 'Keterangan'],
+                    rows: filtered.map(h => [new Date(h.time).toLocaleString('id-ID'), h.title, h.desc])
+                });
+            }
+            if (jenis === 'akun' || jenis === 'gabungan') {
+                sections.push({
+                    key: 'akun', title: 'Daftar Akun Login',
+                    head: ['Username', 'Nama', 'Role', 'Kelompok'],
+                    rows: Object.entries(usersDB).map(([u, acc]) => [u, acc.name, acc.role, acc.regu ? (regus[acc.regu]?.name || acc.regu) : '-'])
+                });
+            }
+            return sections;
+        }
+
+        function renderLaporanPreview() {
+            const container = document.getElementById('laporanPreviewContainer');
+            if (!container) return;
+            const jenis = document.getElementById('laporanJenis').value;
+            const sections = buildLaporanData(jenis);
+            const stamp = document.getElementById('laporanGeneratedAt');
+            if (stamp) stamp.textContent = new Date().toLocaleString('id-ID');
+
+            if (sections.length === 0 || sections.every(s => s.rows.length === 0)) {
+                container.innerHTML = '<p class="text-sm text-slate-500 italic">Tidak ada data untuk ditampilkan.</p>';
+                return;
+            }
+
+            container.innerHTML = sections.map(sec => `
+                <div class="mb-5 last:mb-0">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">${sec.title} (${sec.rows.length} baris)</h4>
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="border-b border-slate-700 text-slate-400 font-semibold bg-slate-900/70">
+                                ${sec.head.map(h => `<th class="p-2 whitespace-nowrap">${h}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800">
+                            ${sec.rows.length === 0
+                                ? `<tr><td colspan="${sec.head.length}" class="p-3 text-slate-500 italic">Belum ada data.</td></tr>`
+                                : sec.rows.map(r => `<tr class="text-slate-300">${r.map(c => `<td class="p-2">${String(c).replace(/</g, '&lt;')}</td>`).join('')}</tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `).join('');
+        }
+
+        function getLaporanMeta(jenis) {
+            const labels = {
+                presensi: 'Rekap Presensi Ronda',
+                kejadian: 'Laporan Kejadian',
+                tamu: 'Buku Tamu & Kendaraan',
+                log: 'Log Aktivitas / Riwayat',
+                akun: 'Daftar Akun Login',
+                gabungan: 'Laporan Gabungan (Semua Data)'
+            };
+            const today = new Date().toISOString().slice(0, 10);
+            return { title: labels[jenis] || 'Laporan', fileName: `Laporan_${jenis}_${today}` };
+        }
+
+        // Ekspor ke PDF menggunakan jsPDF + autoTable
+        function exportLaporanPDF() {
+            if (typeof window.jspdf === 'undefined') {
+                showToast('Library PDF belum termuat. Periksa koneksi internet Anda.', 'error');
+                return;
+            }
+            const jenis = document.getElementById('laporanJenis').value;
+            const sections = buildLaporanData(jenis);
+            if (sections.every(s => s.rows.length === 0)) {
+                showToast('Tidak ada data untuk diekspor.', 'warning');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+            const pageWidth = doc.internal.pageSize.getWidth();
+            let yPos = 16;
+
+            const drawHeader = () => {
+                doc.setFontSize(14);
+                doc.setFont('helvetica', 'bold');
+                doc.text('PRESENSI RONDA - RT 02 / RW 20', pageWidth / 2, 14, { align: 'center' });
+                doc.setFontSize(10);
+                doc.setFont('helvetica', 'normal');
+                doc.text('Rewulu Wetan Sidokarto Godean', pageWidth / 2, 20, { align: 'center' });
+            };
+            drawHeader();
+
+            sections.forEach((sec, i) => {
+                if (i > 0 && sec.rows.length > 0) {
+                    doc.addPage();
+                    doc.lastAutoTable.finalY = 16;
+                }
+                const startY = i === 0 ? 28 : 16;
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'bold');
+                doc.text(`${sec.title} (${sec.rows.length} data)`, 14, i === 0 ? startY : (doc.lastAutoTable ? doc.lastAutoTable.finalY + 10 : 16));
+
+                doc.autoTable({
+                    head: [sec.head],
+                    body: sec.rows.map(r => r.map(c => String(c ?? '-'))),
+                    startY: (i === 0 ? startY : (doc.lastAutoTable ? doc.lastAutoTable.finalY + 14 : 20)) + 3,
+                    theme: 'grid',
+                    styles: { fontSize: 8, cellPadding: 2 },
+                    headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
+                    alternateRowStyles: { fillColor: [241, 245, 249] },
+                    margin: { left: 14, right: 14 }
+                });
+            });
+
+            yPos = doc.lastAutoTable.finalY + 16;
+            if (yPos > doc.internal.pageSize.getHeight() - 20) {
+                doc.addPage();
+                yPos = 20;
+            }
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Dicetak: ${new Date().toLocaleString('id-ID')} oleh ${currentUser ? currentUser.name : 'Admin'}`, 14, yPos);
+
+            doc.save(getLaporanMeta(jenis).fileName + '.pdf');
+            showToast('Laporan berhasil diekspor ke PDF!', 'success');
+        }
+
+        // Ekspor ke Excel (.xlsx) menggunakan SheetJS
+        function exportLaporanExcel() {
+            if (typeof XLSX === 'undefined') {
+                showToast('Library Excel belum termuat. Periksa koneksi internet Anda.', 'error');
+                return;
+            }
+            const jenis = document.getElementById('laporanJenis').value;
+            const sections = buildLaporanData(jenis);
+            if (sections.every(s => s.rows.length === 0)) {
+                showToast('Tidak ada data untuk diekspor.', 'warning');
+                return;
+            }
+
+            const wb = XLSX.utils.book_new();
+            sections.forEach(sec => {
+                const titleRow = [sec.title.toUpperCase()];
+                const aoa = [
+                    ['PRESENSI RONDA - RT 02 / RW 20 Rewulu Wetan Sidokarto Godean'],
+                    [`Dicetak: ${new Date().toLocaleString('id-ID')}`],
+                    [],
+                    sec.head,
+                    ...sec.rows.map(r => r.map(c => String(c ?? '-')))
+                ];
+                const ws = XLSX.utils.aoa_to_sheet(aoa);
+                // Lebar kolom otomatis
+                ws['!cols'] = sec.head.map((h, ci) => ({
+                    wch: Math.max(h.length + 4, ...sec.rows.map(r => String(r[ci] ?? '').length + 4), 12)
+                }));
+                const sheetName = sec.title.replace(/[^A-Za-z0-9 ]/g, '').slice(0, 28) || sec.key;
+                XLSX.utils.book_append_sheet(wb, ws, sheetName);
+            });
+
+            XLSX.writeFile(wb, getLaporanMeta(jenis).fileName + '.xlsx');
+            showToast('Laporan berhasil diekspor ke Excel!', 'success');
+        }
+
         function renderAdminReports() {
             // Render Incidents
             const incContainer = document.getElementById('adminIncidentList');
@@ -2582,6 +2941,8 @@
                 activeMobileBtn.classList.add('text-blue-400');
                 activeMobileBtn.classList.remove('text-slate-500');
             }
+
+            localStorage.setItem("siskamling_active_ketua_tab", tabId);
 
             if (tabId === 'riwayat') renderHistory();
             if (tabId === 'presensi') triggerLocationVerification();
@@ -3077,6 +3438,7 @@
             if (activeRegu.members[index].status !== status) {
                 activeRegu.members[index].status = status;
                 activeRegu.members[index].time = timeStr;
+                recordAttendanceHistory(currentUser.regu, activeRegu.members[index].name, status, timeStr);
                 
                 let actionText = status === 'hadir' ? 'telah hadir' : (status === 'izin' ? 'izin' : 'absen (mangkir)');
                 let colorClass = status === 'hadir' ? 'text-green-400' : (status === 'izin' ? 'text-yellow-400' : 'text-red-400');

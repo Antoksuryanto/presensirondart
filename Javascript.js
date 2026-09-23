@@ -157,6 +157,7 @@ function loadAllData() {
       appHistory: appHistory,
       incidentReports: incidentReports,
       guestList: guestList,
+      attendanceHistory: rekap,
       geofenceSettings: geofenceSettings
     }
   };
@@ -356,6 +357,7 @@ function saveAllData(data) {
   saveAkun(ss, data.usersDB || {});
   saveKelompok(ss, data.regus || {});
   saveRekap(ss, data.regus || {});
+  saveRekapHistory(ss, data.attendanceHistory || []);
   saveKejadian(ss, data.incidentReports || []);
   saveTamu(ss, data.guestList || []);
   savePengaturan(ss, data.geofenceSettings || {});
@@ -429,6 +431,44 @@ function saveRekap(ss, regus) {
   });
 
   // Tulis ulang: header + semua baris (lama + baru hari ini)
+  var out = [["date", "regu_key", "regu_name", "member_name", "status", "time"]].concat(rows);
+  clearSheet(sheet);
+  if (out.length > 1) {
+    sheet.getRange(1, 1, out.length, 6).setValues(out);
+  }
+}
+
+// Merge attendanceHistory dari app ke REKAP_PRESENSI (tambah baris yang belum ada)
+function saveRekapHistory(ss, history) {
+  if (!history || !history.length) return;
+  var sheet = ss.getSheetByName(SHEETS.REKAP);
+
+  var existing = sheet.getDataRange().getValues();
+  var rows = [];
+  for (var i = 1; i < existing.length; i++) {
+    if (String(existing[i][0]).trim()) {
+      existing[i][0] = normalizeDateStr(existing[i][0]);
+      rows.push(existing[i]);
+    }
+  }
+
+  history.forEach(function (h) {
+    if (!h || !h.date || !h.reguKey || !h.memberName) return;
+    var found = false;
+    for (var r = 0; r < rows.length; r++) {
+      if (String(rows[r][0]) === h.date && String(rows[r][1]) === h.reguKey && String(rows[r][3]) === h.memberName) {
+        // Update status & time bila app punya data lebih baru
+        rows[r][4] = h.status;
+        rows[r][5] = h.time || "";
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      rows.push([h.date, h.reguKey, h.reguName || "", h.memberName, h.status, h.time || ""]);
+    }
+  });
+
   var out = [["date", "regu_key", "regu_name", "member_name", "status", "time"]].concat(rows);
   clearSheet(sheet);
   if (out.length > 1) {
